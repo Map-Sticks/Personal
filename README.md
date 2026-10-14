@@ -26,10 +26,18 @@ alert. Requirements and lessons learned are in its `CONTEXT.md`.
 `Route Cable Along Tray` (Electrical panel) is also a **scaffold only**; it will route a circuit
 path along cable trays and report cable length. See its `CONTEXT.md`.
 
+`CircuitHub` (Electrical panel) is an existing, working tool imported as-is for managing circuits
+and panels (modeless window: `script.py` + `ui.xaml`). It is not yet reviewed against this repo's
+patterns; improvements are planned. It writes a per-user `circuit_hub_settings.json` (git-ignored).
+
 ```text
 CustomPyRevit.extension/
 └── Custom Tools.tab/
     ├── Electrical.panel/
+    │   ├── CircuitHub.pushbutton/
+    │   │   ├── bundle.yaml
+    │   │   ├── script.py
+    │   │   └── ui.xaml
     │   ├── Place Ceiling Devices.pushbutton/
     │   │   ├── CONTEXT.md
     │   │   ├── bundle.yaml
