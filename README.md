@@ -23,11 +23,18 @@ there is no open project, the active document is a family, or there are no sheet
 `Place Ceiling Devices` (Electrical panel) is a **scaffold only**: it shows a "not implemented"
 alert. Requirements and lessons learned are in its `CONTEXT.md`.
 
+`Route Cable Along Tray` (Electrical panel) is also a **scaffold only**; it will route a circuit
+path along cable trays and report cable length. See its `CONTEXT.md`.
+
 ```text
 CustomPyRevit.extension/
 └── Custom Tools.tab/
     ├── Electrical.panel/
-    │   └── Place Ceiling Devices.pushbutton/
+    │   ├── Place Ceiling Devices.pushbutton/
+    │   │   ├── CONTEXT.md
+    │   │   ├── bundle.yaml
+    │   │   └── script.py
+    │   └── Route Cable Along Tray.pushbutton/
     │       ├── CONTEXT.md
     │       ├── bundle.yaml
     │       └── script.py
