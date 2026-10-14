@@ -8,16 +8,26 @@ Codespaces, then load and test them in Revit on Windows.
 > Revit or the pyRevit/Revit API. Run and verify model-changing commands in a
 > Revit installation.
 
-## Included example
+## Included buttons
 
 `Document Info` is a read-only pushbutton that reports the active document name
 and the number of selected elements in the pyRevit output window.
+
+`List Sheets` is a read-only pushbutton that lists every sheet in the active
+project, sorted alphabetically by sheet number (case-insensitive). Its output
+table contains the sheet number, sheet name, and placeholder status, with a
+total sheet count. Placeholder sheets and sheets not shown in the sheet list
+are included; linked projects are not queried. It reports a clear message if
+there is no open project, the active document is a family, or there are no sheets.
 
 ```text
 CustomPyRevit.extension/
 └── Custom Tools.tab/
     └── Getting Started.panel/
-        └── Document Info.pushbutton/
+        ├── Document Info.pushbutton/
+        │   ├── bundle.yaml
+        │   └── script.py
+        └── List Sheets.pushbutton/
             ├── bundle.yaml
             └── script.py
 ```
@@ -48,3 +58,27 @@ CustomPyRevit.extension/
 The same folder-suffix convention applies when adding tabs (`.tab`) and panels
 (`.panel`). See the [pyRevit extension documentation](https://docs.pyrevitlabs.io/extensions/)
 for bundle types, metadata, script engines, and the Revit API environment.
+
+## Check List Sheets
+
+The automated checks use a mock pyRevit API and can run in Codespaces without
+installing Revit or third-party Python packages:
+
+```sh
+python -m unittest discover -s tests -p test_list_sheets.py -v
+```
+
+These checks cover sorting, placeholder inclusion, the output table and total,
+and empty or invalid document states. They do not replace testing inside Revit.
+
+Before merging this button's pull request:
+
+1. Get this branch's files onto your Windows machine and load the extension
+   using the steps above.
+2. Open a project with sheets and click **Custom Tools > Getting Started >
+   List Sheets**.
+3. Compare the output against a sheet schedule that includes all sheets,
+   including placeholders. Check the numbers, names, placeholder status, and total.
+4. Try a project without sheets and a family document; both should show an
+   explanatory message instead of a table.
+5. Confirm that clicking the button does not change the model.
