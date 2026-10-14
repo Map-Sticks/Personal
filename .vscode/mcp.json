@@ -1,0 +1,25 @@
+{
+    "inputs": [
+        {
+            "id": "revitMcpPath",
+            "type": "promptString",
+            "description": "Absolute path to your clone of mcp-server-for-revit-python (folder containing main.py)",
+            "default": "${env:USERPROFILE}\\mcp-server-for-revit-python"
+        }
+    ],
+    "servers": {
+        "pyrevit-mcp": {
+            "type": "stdio",
+            "command": "uv",
+            "args": [
+                "run",
+                "--frozen",
+                "--directory",
+                "${input:revitMcpPath}",
+                "mcp",
+                "run",
+                "${input:revitMcpPath}\\main.py"
+            ]
+        }
+    }
+}
