@@ -20,9 +20,17 @@ total sheet count. Placeholder sheets and sheets not shown in the sheet list
 are included; linked projects are not queried. It reports a clear message if
 there is no open project, the active document is a family, or there are no sheets.
 
+`Place Ceiling Devices` (Electrical panel) is a **scaffold only**: it shows a "not implemented"
+alert. Requirements and lessons learned are in its `CONTEXT.md`.
+
 ```text
 CustomPyRevit.extension/
 └── Custom Tools.tab/
+    ├── Electrical.panel/
+    │   └── Place Ceiling Devices.pushbutton/
+    │       ├── CONTEXT.md
+    │       ├── bundle.yaml
+    │       └── script.py
     └── Getting Started.panel/
         ├── Document Info.pushbutton/
         │   ├── bundle.yaml
