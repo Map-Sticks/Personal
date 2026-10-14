@@ -32,6 +32,17 @@ CustomPyRevit.extension/
             └── script.py
 ```
 
+## AI-assisted development kit
+
+- `.github/copilot-instructions.md` - rules every AI assistant should follow in this repo.
+- `docs/pyrevit-patterns.md` - transactions, modeless WPF + ExternalEvent, XAML, debugging.
+- `docs/pyrevit-versions.md` - pyRevit release to Python engine matrix and IronPython 2.7 rules.
+- `docs/revit-api-references.md` - local and online API sources.
+- `tools/revit_api_lookup.py` - search the installed Revit's `RevitAPI.xml` (e.g.
+  `python tools/revit_api_lookup.py ExternalEvent --ui --year 2025`).
+- `Templates.panel/Modeless Window.pushbutton` - working modeless window template (sets Comments on the
+  selection). Copy it for every new window-based tool.
+
 ## Load the extension in Revit
 
 1. Install pyRevit in a supported Revit environment.

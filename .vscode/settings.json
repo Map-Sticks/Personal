@@ -1,5 +1,16 @@
 {
     "chat.mcp.discovery.enabled": {
         "copilot": true
+    },
+    "python.analysis.extraPaths": [
+        "${env:APPDATA}/pyRevit-Master/pyrevitlib",
+        "${env:APPDATA}/pyRevit-Master/site-packages"
+    ],
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingImports": "none",
+        "reportAttributeAccessIssue": "none"
+    },
+    "files.associations": {
+        "*.xaml": "xml"
     }
 }

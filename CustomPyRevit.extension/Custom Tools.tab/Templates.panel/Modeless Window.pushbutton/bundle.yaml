@@ -1,0 +1,3 @@
+title: Modeless Window
+tooltip: Template - modeless WPF window that edits the model via ExternalEvent and a transaction. Sets the Comments parameter on the selected elements.
+author: Custom
