@@ -1,0 +1,94 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Circuit Hub" Height="940" Width="1320"
+        MinHeight="760" MinWidth="1050"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanResize"
+        ShowInTaskbar="False" Topmost="False">
+  <Window.Resources>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#FFB8D6FB"/>
+    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#FF000000"/>
+  </Window.Resources>
+  <Grid Margin="10">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="110"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+    <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="True">
+      <Button Name="btnRefresh" Content="Refresh" Width="80" Margin="0,0,6,0" DockPanel.Dock="Left"/>
+      <Button Name="btnUndoLast" Content="Undo last" Width="85" Margin="0,0,6,0" DockPanel.Dock="Left"/>
+      <Button Name="btnLocateRevitSelection" Content="Locate Revit selection" Width="140" Margin="0,0,6,0" DockPanel.Dock="Left"/>
+      <Button Name="btnShowAllPanels" Content="Open all panels" Width="105" Margin="0,0,6,0" DockPanel.Dock="Left"/>
+      <Button Name="btnShowTargetOnly" Content="Target only" Width="85" Margin="0,0,6,0" DockPanel.Dock="Left"/>
+      <Button Name="btnExpandSelected" Content="Expand selected" Width="110" Margin="0,0,6,0" DockPanel.Dock="Left"/>
+      <Button Name="btnCollapseSelected" Content="Collapse selected" Width="115" Margin="0,0,12,0" DockPanel.Dock="Left"/>
+      <Button Name="btnClose" Content="Close" Width="70" Margin="8,0,0,0" DockPanel.Dock="Right"/>
+      <TextBlock Text="Level:" VerticalAlignment="Center" Margin="8,0,6,0" DockPanel.Dock="Left"/>
+      <ComboBox Name="cmbLevelFilter" Width="180" Margin="0,0,12,0" DockPanel.Dock="Left"/>
+      <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,6,0" DockPanel.Dock="Left"/>
+      <TextBox Name="tbSearch" VerticalContentAlignment="Center"/>
+    </DockPanel>
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="2*" MinWidth="420"/>
+        <ColumnDefinition Width="8"/>
+        <ColumnDefinition Width="430" MinWidth="410"/>
+      </Grid.ColumnDefinitions>
+      <GroupBox Grid.Column="0" Header="Panels collapsed by default - double-click panels/circuits to expand; Ctrl/Shift select rows">
+        <ListBox Name="lbItems" Margin="6" SelectionMode="Extended" AllowDrop="True"/>
+      </GroupBox>
+      <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#DDD"/>
+      <StackPanel Grid.Column="2" Margin="8,0,0,0">
+        <Border Background="#FFF8F8F8" BorderBrush="#DDD" BorderThickness="1" Padding="6" Margin="0,0,0,8">
+          <StackPanel>
+            <TextBlock Text="Selection rules" FontWeight="Bold" Margin="0,0,0,3"/>
+            <TextBlock Text="Clicked/highlighted row in this tool = target circuit for target actions." TextWrapping="Wrap"/>
+            <TextBlock Text="Ctrl/Shift highlighted rows in this tool = highlighted-row actions." TextWrapping="Wrap"/>
+            <TextBlock Text="Selected elements in Revit view = Revit selection actions. For panel reassignment, highlight a panel row first or choose from the dialog. Ctrl+Z in the tool also posts Revit Undo." TextWrapping="Wrap"/>
+            <TextBlock Text="Alt-drag test: hold Alt and drag one or many selected circuit rows onto a panel row, or one or many selected fixture rows onto a circuit row. Mixed selections are allowed; start the Alt-drag from any already highlighted row to keep the whole multi-selection. Incompatible row types are ignored after confirmation. Valid drop targets highlight green; invalid targets highlight red." TextWrapping="Wrap" Foreground="#666"/>
+            <TextBlock Name="txtSelectedSummary" Text="Highlighted rows: 0 circuit row(s), 0 fixture row(s)." Foreground="#555" Margin="0,4,0,0" TextWrapping="Wrap"/>
+          </StackPanel>
+        </Border>
+        <GroupBox Header="Target circuit" Margin="0,0,0,8">
+          <StackPanel Margin="6">
+            <TextBlock Name="txtPanel" Text="Target panel: -" TextWrapping="Wrap" Margin="0,0,0,4"/>
+            <TextBlock Name="txtCircuit" Text="Target circuit: -" TextWrapping="Wrap" Margin="0,0,0,4"/>
+            <TextBlock Name="txtLoad" Text="Target load: -" TextWrapping="Wrap"/>
+          </StackPanel>
+        </GroupBox>
+        <GroupBox Header="Highlighted rows in tool" Margin="0,0,0,8">
+          <StackPanel Margin="6">
+            <Button Name="btnSelectRowsInView" Content="Highlighted rows: Select in Revit view" Height="28" Margin="0,0,0,6"/>
+            <Button Name="btnMoveSelectedCircuits" Content="Highlighted circuit row(s): Move to panel..." Height="28" Margin="0,0,0,6"/>
+            <Button Name="btnRemoveSelectedFixtureRows" Content="Highlighted fixture row(s): Remove from circuits" Height="28"/>
+          </StackPanel>
+        </GroupBox>
+        <GroupBox Header="Target circuit control" Margin="0,0,0,8">
+          <StackPanel Margin="6">
+            <Button Name="btnRenameLoad" Content="Target circuit: Rename load..." Height="28" Margin="0,0,0,6"/>
+            <Button Name="btnMoveTargetPanel" Content="Target circuit: Move to panel..." Height="28"/>
+          </StackPanel>
+        </GroupBox>
+        <GroupBox Header="Revit selection to target circuit" Margin="0,0,0,8">
+          <StackPanel Margin="6">
+            <Button Name="btnAddRevitSelection" Content="Revit selection: Add only if uncircuited" Height="28" Margin="0,0,0,6"/>
+            <Button Name="btnReassignRevitSelection" Content="Revit selection: Reassign existing/new to target" Height="28" Margin="0,0,0,6"/>
+            <Button Name="btnReassignSelectionToPanel" Content="Revit selection: Move existing circuits to panel..." Height="28" Margin="0,0,0,6"/>
+            <Button Name="btnRemoveRevitSelection" Content="Revit selection: Remove from target circuit" Height="28"/>
+          </StackPanel>
+        </GroupBox>
+        <GroupBox Header="Create" Margin="0,0,0,8">
+          <StackPanel Margin="6">
+            <Button Name="btnCreateCircuit" Content="Revit selection: New circuit (asks if already circuited)" Height="28" Margin="0,0,0,6"/>
+            <Button Name="btnCreateSchedule" Content="Create panel schedule..." Height="28"/>
+          </StackPanel>
+        </GroupBox>
+      </StackPanel>
+    </Grid>
+    <GroupBox Grid.Row="2" Header="Activity log" Margin="0,8,0,0">
+      <ListBox Name="lbLog" FontFamily="Consolas" FontSize="11" Margin="6"/>
+    </GroupBox>
+    <TextBlock Grid.Row="3" Name="txtStatus" Text="Ready." Foreground="#444" Margin="2,6,2,0" TextWrapping="Wrap"/>
+  </Grid>
+</Window>
