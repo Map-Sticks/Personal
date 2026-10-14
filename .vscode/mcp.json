@@ -5,12 +5,21 @@
             "type": "promptString",
             "description": "Absolute path to your clone of mcp-server-for-revit-python (folder containing main.py)",
             "default": "${env:USERPROFILE}\\mcp-server-for-revit-python"
+        },
+        {
+            "id": "revitRoutesPort",
+            "type": "promptString",
+            "description": "pyRevit Routes port of the Revit instance to control (pyRevit Settings > Routes; 48884 for the first instance)",
+            "default": "48884"
         }
     ],
     "servers": {
         "pyrevit-mcp": {
             "type": "stdio",
             "command": "uv",
+            "env": {
+                "REVIT_PORT": "${input:revitRoutesPort}"
+            },
             "args": [
                 "run",
                 "--frozen",

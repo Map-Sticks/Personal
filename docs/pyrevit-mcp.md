@@ -19,8 +19,18 @@ AI client --stdio--> main.py (MCP server) --HTTP localhost:48884--> pyRevit Rout
 ## Client config
 
 - VS Code / Copilot: `.vscode/mcp.json` in this repo defines the `pyrevit-mcp` stdio server.
-  You are prompted once for the clone path.
+  You are prompted once for the clone path and the Routes port (`REVIT_PORT`; each running Revit
+  gets its own port, 48884 for the first).
 - Claude Code: `claude mcp add -s user "Revit-Connector" -- uv run --frozen mcp run <path>\main.py`
+
+## Known issue: 401 "Bridge is disconnected or pairing is invalid"
+
+Stock pyRevit (6.0.0 and upstream `develop`) does not copy HTTP headers onto the route `Request`, so the
+extension's `Authorization` check always fails. Fix: in
+`%APPDATA%\pyRevit-Master\pyrevitlib\pyrevit\routes\server\server.py`, make `_prepare_request` keep the
+`Request` in a variable, call `request.add_header(key, value)` for every `self.headers.items()`, and return
+it. Restart Revit (Reload is not enough). A pyRevit update overwrites the edit; reapply it.
+Avoid patching `startup.py` at runtime: reloads hung while that was being tried (cause unconfirmed).
 
 ## Safety
 
