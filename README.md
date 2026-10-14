@@ -28,7 +28,8 @@ path along cable trays and report cable length. See its `CONTEXT.md`.
 
 `CircuitHub` (Electrical panel) is an existing, working tool imported as-is for managing circuits
 and panels (modeless window: `script.py` + `ui.xaml`). It is not yet reviewed against this repo's
-patterns; improvements are planned. It writes a per-user `circuit_hub_settings.json` (git-ignored).
+patterns; improvements are planned (see its `CONTEXT.md` for the roadmap, e.g. virtual panels and
+panel create/rename/level editing). It writes a per-user `circuit_hub_settings.json` (git-ignored).
 
 ```text
 CustomPyRevit.extension/
