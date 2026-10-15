@@ -484,6 +484,23 @@ class CircuitHubTests(unittest.TestCase):
         panel.get_Parameter = lambda bip: params[bip]
         self.assertEqual(("Fam", "<No Type>"), self.mod.panel_family_and_type(panel))
 
+    def test_type_name_uses_type_name_parameter_not_element_id(self):
+        class Symbol:
+            Id = Id(987654)
+            FamilyName = "Panelboard"
+
+            @property
+            def Name(self):
+                raise AttributeError("Name")
+
+            def get_Parameter(self, bip):
+                return Mock(**{"AsString.return_value": "225A MLO"}) if bip == "symbol" else None
+        self.mod.BuiltInParameter.SYMBOL_NAME_PARAM = "symbol"
+        self.mod.BuiltInParameter.ALL_MODEL_TYPE_NAME = "model"
+        panel = SimpleNamespace(Id=Id(1), GetTypeId=lambda: Id(987654))
+        self.doc.GetElement = lambda eid: Symbol()
+        self.assertEqual(("Panelboard", "225A MLO"), self.mod.panel_family_and_type(panel))
+
     def build_rows(self, family_filter, type_filter, search=""):
         class Items(list):
             Clear = list.clear

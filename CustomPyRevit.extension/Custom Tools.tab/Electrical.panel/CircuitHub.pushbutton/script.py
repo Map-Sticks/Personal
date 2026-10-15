@@ -613,6 +613,23 @@ def phase_class(el):
     return None
 
 
+def element_type_name(el_type):
+    """Type name of an ElementType. IronPython often cannot read ElementType.Name, so use the
+    Type Name parameters first and never fall back to the element id."""
+    for bip_name in ("SYMBOL_NAME_PARAM", "ALL_MODEL_TYPE_NAME"):
+        try:
+            p = el_type.get_Parameter(getattr(BuiltInParameter, bip_name))
+            txt = (p.AsString() or "") if p else ""
+            if txt:
+                return txt
+        except Exception:
+            pass
+    try:
+        return el_type.Name or ""
+    except Exception:
+        return ""
+
+
 def panel_family_and_type(panel):
     """Return (family name, type name) for an equipment instance, with readable fallbacks."""
     family = ""
@@ -623,7 +640,7 @@ def panel_family_and_type(panel):
             family = el_type.FamilyName or ""
         except Exception:
             family = ""
-        type_name = safe_name(el_type, "")
+        type_name = element_type_name(el_type)
     if not family or not type_name:
         for bip_name, is_family in (("ELEM_FAMILY_PARAM", True), ("ELEM_TYPE_PARAM", False)):
             if (family if is_family else type_name):
