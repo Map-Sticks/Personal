@@ -57,6 +57,22 @@
             <Button Name="btnCreateCircuit" Content="Create new circuit from selected / panel" Height="32" Margin="2"/>
           </UniformGrid>
         </StackPanel></TabItem>
+        <TabItem Header="Panels"><StackPanel Margin="8">
+          <TextBlock Text="Rename panels" FontWeight="Bold" Margin="0,0,0,6"/>
+          <TextBlock Text="Highlight real PANEL rows in the tree. Enable Show empty panels to include panels without circuits. Unassigned groups are not panels." TextWrapping="Wrap" Margin="0,0,0,8"/>
+          <Button Name="btnRenamePanel" Content="Rename one highlighted panel..." Height="32" Margin="0,0,0,12"/>
+          <TextBlock Text="Bulk rename highlighted panels" FontWeight="Bold" Margin="0,0,0,6"/>
+          <TextBlock Text="Find (literal, case-sensitive; blank skips replacement)"/>
+          <TextBox Name="tbPanelFind" Margin="0,4,0,8"/>
+          <TextBlock Text="Replace with (may be blank)"/>
+          <TextBox Name="tbPanelReplace" Margin="0,4,0,8"/>
+          <TextBlock Text="Prefix"/>
+          <TextBox Name="tbPanelPrefix" Margin="0,4,0,8"/>
+          <TextBlock Text="Suffix"/>
+          <TextBox Name="tbPanelSuffix" Margin="0,4,0,8"/>
+          <Button Name="btnBulkRenamePanels" Content="Preview bulk rename..." Height="32" Margin="0,4,0,8"/>
+          <TextBlock Text="Replacement is applied first, then prefix and suffix. Expand confirmation details to review every change. Blank or duplicate names are blocked. Cancel makes no changes; confirmation uses one undoable transaction." TextWrapping="Wrap" Foreground="#555"/>
+        </StackPanel></TabItem>
         <TabItem Header="Filter"><StackPanel Margin="8">
           <TextBlock Text="Category / fixture filter" FontWeight="Bold" Margin="0,0,0,6"/>
           <CheckBox Name="chkCategoryFilter" Content="Enable category filter before Revit-selection actions" Margin="0,0,0,6"/>

@@ -26,11 +26,15 @@ alert. Requirements and lessons learned are in its `CONTEXT.md`.
 `Route Cable Along Tray` (Electrical panel) is also a **scaffold only**; it will route a circuit
 path along cable trays and report cable length. See its `CONTEXT.md`.
 
-`CircuitHub` (Electrical panel) uses the v11.3 files imported as-is from `Circuit Test` for managing
-circuits and panels (modeless window: `script.py` + `ui.xaml`). It includes category filtering,
-inline add/remove actions, unassigned circuits grouped by fixture level, and panel picking in the
-view. Settings are stored in `%APPDATA%/CircuitHub/circuit_hub_settings.json`. Known review findings
-and planned improvements are in its `CONTEXT.md`; Revit validation is still required.
+`CircuitHub` (Electrical panel) manages circuits and panels in a modeless window. Its **Panels** tab
+supports single-panel rename and bulk literal find/replace with prefixes/suffixes, a confirmation
+preview, duplicate-name checks, and one undoable transaction. It also includes category filtering,
+row-specific add/remove actions, unassigned circuits grouped by fixture level, and panel picking.
+Model-access actions are routed through ExternalEvent with document guards and indexed circuit
+memberships. Settings are stored in `%APPDATA%/CircuitHub/circuit_hub_settings.json`.
+Virtual panels, panel creation, and level editing remain future work. See
+[CircuitHub context and Revit acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CircuitHub.pushbutton/CONTEXT.md);
+actual Revit validation is still required.
 
 ```text
 CustomPyRevit.extension/
@@ -38,6 +42,9 @@ CustomPyRevit.extension/
     ├── Electrical.panel/
     │   ├── CircuitHub.pushbutton/
     │   │   ├── bundle.yaml
+    │   │   ├── CONTEXT.md
+    │   │   ├── lib/
+    │   │   │   └── circuit_hub_logic.py
     │   │   ├── script.py
     │   │   └── ui.xaml
     │   ├── Place Ceiling Devices.pushbutton/
@@ -119,3 +126,16 @@ Before merging this button's pull request:
 4. Try a project without sheets and a family document; both should show an
    explanatory message instead of a table.
 5. Confirm that clicking the button does not change the model.
+
+## Check CircuitHub
+
+```sh
+python -m unittest discover -s tests -p test_circuit_hub.py -v
+```
+
+These tests use mock Revit/WPF objects to check rename validation, cancellation, rollback,
+document guards, deferred callbacks, membership indexing, row-specific removal, and XAML control
+wiring. They do not run Revit or IronPython. Run all repository checks with
+`python -m unittest discover -s tests -v`, then follow the
+[CircuitHub acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CircuitHub.pushbutton/CONTEXT.md#revit-acceptance-checks-disposable-project)
+in a disposable Revit project.

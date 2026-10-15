@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Circuit Hub v11.3 - compact circuit manager with category filter and pick-panel-in-view."""
+"""Circuit Hub - circuit management and validated panel renaming."""
 __title__ = "Circuit\nHub"
 __author__ = "Jacques-Michael"
 __persistentengine__ = True
@@ -8,6 +8,8 @@ import os
 import re
 import json
 import traceback
+from functools import wraps
+from circuit_hub_logic import element_id_value, panel_rename_plan, bulk_panel_name, text_type
 
 import clr
 clr.AddReference("RevitAPI")
@@ -16,7 +18,7 @@ clr.AddReference("PresentationFramework")
 clr.AddReference("PresentationCore")
 clr.AddReference("WindowsBase")
 
-from System import Action
+from System import Int32, Int64
 from System.Collections.Generic import List
 from System.Windows import MessageBox, MessageBoxButton, MessageBoxImage, Thickness, FontWeights, VerticalAlignment, DragDrop, DragDropEffects, DataObject
 from System.Windows.Controls import ListBoxItem, StackPanel, Button, TextBlock, ItemsControl
@@ -24,18 +26,21 @@ from System.Windows import Controls
 from System.Windows.Input import Keyboard, Key, ModifierKeys, MouseButtonState
 from System.Windows.Media import Brushes, VisualTreeHelper
 
-from pyrevit import revit, forms, script
-from Autodesk.Revit.DB import ElementId, ElementSet, Transaction, FilteredElementCollector, BuiltInCategory, BuiltInParameter, Level
+from pyrevit import revit, forms, script, HOST_APP
+from Autodesk.Revit.DB import ElementId, ElementSet, TransactionStatus, StorageType, FilteredElementCollector, BuiltInCategory, BuiltInParameter, Level
 from Autodesk.Revit.DB.Electrical import ElectricalSystem, ElectricalSystemType, PanelScheduleView, PanelScheduleTemplate
-from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent, RevitCommandId, PostableCommand
+from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent, ExternalEventRequest, RevitCommandId, PostableCommand
+from Autodesk.Revit.Exceptions import OperationCanceledException
 from Autodesk.Revit.UI.Selection import ISelectionFilter, ObjectType
 
 doc = revit.doc
 uidoc = revit.uidoc
-APP = None
-DOC_CHANGED_HANDLER = None
+APP = globals().get("APP")
+DOC_CHANGED_HANDLER = globals().get("DOC_CHANGED_HANDLER")
 ELEMENT_LEVEL_CACHE = {}
 PROJECT_LEVELS_CACHE = []
+LOGGER = script.get_logger()
+USE_64_BIT_IDS = int(HOST_APP.version) >= 2024
 
 DEFAULT_ALLOWED_CATEGORIES = [
     "Electrical Fixtures",
@@ -107,7 +112,7 @@ def save_settings(data):
 
 def show_error(title, msg):
     try:
-        MessageBox.Show(str(msg), title, MessageBoxButton.OK, MessageBoxImage.Error)
+        MessageBox.Show(text_type(msg), title, MessageBoxButton.OK, MessageBoxImage.Error)
     except Exception:
         print(title)
         print(msg)
@@ -115,7 +120,7 @@ def show_error(title, msg):
 
 def show_warning(title, msg):
     try:
-        MessageBox.Show(str(msg), title, MessageBoxButton.OK, MessageBoxImage.Warning)
+        MessageBox.Show(text_type(msg), title, MessageBoxButton.OK, MessageBoxImage.Warning)
     except Exception:
         print(title)
         print(msg)
@@ -123,6 +128,19 @@ def show_warning(title, msg):
 
 class UserFacingError(Exception):
     pass
+
+
+def api_callback(method):
+    """Defer the entire callback, including reads and preflight validation."""
+    @wraps(method)
+    def queued(self, *args):
+        if self.building or self.closed:
+            return
+        if self.executing:
+            return method(self, *args)
+        self.run_direct(method.__name__, lambda: method(self, *args),
+                        refresh=False, transaction=False)
+    return queued
 
 
 def clean_revit_validation_message(msg):
@@ -138,7 +156,9 @@ def clean_revit_validation_message(msg):
 
 
 def as_eid(x):
-    return x if isinstance(x, ElementId) else ElementId(int(x))
+    if isinstance(x, ElementId):
+        return x
+    return ElementId(Int64(x) if USE_64_BIT_IDS else Int32(x))
 
 
 def id_list(items):
@@ -169,7 +189,7 @@ def safe_name(el, fallback=""):
     except Exception:
         pass
     try:
-        return str(el.Id.IntegerValue)
+        return str(element_id_value(el.Id))
     except Exception:
         return fallback
 
@@ -184,7 +204,7 @@ def category_name(el):
 
 
 def element_label(el):
-    return "{0}: {1} ({2})".format(category_name(el), safe_name(el), el.Id.IntegerValue)
+    return "{0}: {1} ({2})".format(category_name(el), safe_name(el), element_id_value(el.Id))
 
 
 def get_load_name(circuit):
@@ -193,6 +213,24 @@ def get_load_name(circuit):
         return (p.AsString() or "") if p else ""
     except Exception:
         return ""
+
+
+def get_panel_name(panel, fallback="<Unnamed panel>"):
+    if panel is None:
+        return fallback
+    param = panel.get_Parameter(BuiltInParameter.RBS_ELEC_PANEL_NAME)
+    return (param.AsString() or fallback) if param else safe_name(panel, fallback)
+
+
+def panel_name_parameter(panel):
+    if panel is None:
+        raise UserFacingError("A selected panel no longer exists. Refresh and retry.")
+    param = panel.get_Parameter(BuiltInParameter.RBS_ELEC_PANEL_NAME)
+    if param is None or param.IsReadOnly or param.StorageType != StorageType.String:
+        raise UserFacingError(
+            "Panel '{0}' has no writable Panel Name parameter. Nothing was renamed."
+            .format(get_panel_name(panel)))
+    return param
 
 
 def set_load_name(circuit, value):
@@ -213,7 +251,7 @@ def circuit_number(circuit):
 def panel_id_of(circuit):
     try:
         panel = circuit.BaseEquipment
-        return panel.Id.IntegerValue if panel else None
+        return element_id_value(panel.Id) if panel else None
     except Exception:
         return None
 
@@ -278,9 +316,9 @@ def element_level_name(el):
     Cached per Cache.build() to avoid repeated parameter/bounding-box scans.
     """
     if el is None:
-        return remember_level_name("<No Level>")
+        return "<No Level>"
     try:
-        eid_int = el.Id.IntegerValue
+        eid_int = element_id_value(el.Id)
         if eid_int in ELEMENT_LEVEL_CACHE:
             return ELEMENT_LEVEL_CACHE[eid_int]
     except Exception:
@@ -294,7 +332,7 @@ def element_level_name(el):
         return value
     try:
         level_id = el.LevelId
-        if level_id and level_id.IntegerValue > 0:
+        if level_id and element_id_value(level_id) > 0:
             level = doc.GetElement(level_id)
             if level:
                 return remember_level_name(safe_name(level, "<No Level>"))
@@ -314,7 +352,7 @@ def element_level_name(el):
             if p and p.HasValue:
                 try:
                     eid = p.AsElementId()
-                    if eid and eid.IntegerValue > 0:
+                    if eid and element_id_value(eid) > 0:
                         level = doc.GetElement(eid)
                         if level:
                             return remember_level_name(safe_name(level, "<No Level>"))
@@ -380,7 +418,7 @@ def panel_level_name(panel):
         return "<No Level>"
     try:
         level_id = panel.LevelId
-        if level_id and level_id.IntegerValue > 0:
+        if level_id and element_id_value(level_id) > 0:
             level = doc.GetElement(level_id)
             if level:
                 return safe_name(level, "<No Level>")
@@ -393,7 +431,7 @@ def panel_level_name(panel):
             if p and p.HasValue:
                 try:
                     eid = p.AsElementId()
-                    if eid and eid.IntegerValue > 0:
+                    if eid and element_id_value(eid) > 0:
                         level = doc.GetElement(eid)
                         if level:
                             return safe_name(level, "<No Level>")
@@ -410,23 +448,41 @@ def panel_level_name(panel):
     return "<No Level>"
 
 
+class CheckedTransaction(revit.Transaction):
+    """Check Commit before newer pyRevit wrappers dispose the native transaction."""
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        try:
+            if exc_type is not None:
+                self._rvtxn.RollBack()
+            else:
+                status = self._rvtxn.Commit()
+                if status != TransactionStatus.Committed:
+                    raise UserFacingError(
+                        "Revit did not commit the action (status: {0}).".format(status))
+        except Exception:
+            if self._rvtxn.GetStatus() == TransactionStatus.Started:
+                self._rvtxn.RollBack()
+            raise
+        finally:
+            self._rvtxn.Dispose()
+        return False
+
+
 def run_transaction(name, work):
-    t = Transaction(doc, "CircuitHub: " + name)
-    t.Start()
     try:
-        msg = work()
-        t.Commit()
-        return msg
-    except Exception:
-        t.RollBack()
-        raise
+        with CheckedTransaction("CircuitHub: " + name, doc=doc,
+                                show_error_dialog=True):
+            return work()
+    finally:
+        CACHE.dirty = True
 
 
 # ---------------- Selection filters ----------------
 class ElectricalEquipmentSelectionFilter(ISelectionFilter):
     def AllowElement(self, element):
         try:
-            return element is not None and element.Category is not None and element.Category.Id.IntegerValue == int(BuiltInCategory.OST_ElectricalEquipment)
+            return element is not None and element.Category is not None and element_id_value(element.Category.Id) == int(BuiltInCategory.OST_ElectricalEquipment)
         except Exception:
             return False
 
@@ -570,10 +626,14 @@ class Cache(object):
         self.templates = {}
         self.level_names = []
         self.category_names = []
+        self.memberships = {}
+        self.circuit_details = {}
+        self.dirty = True
 
     def build(self):
         global ELEMENT_LEVEL_CACHE
         global PROJECT_LEVELS_CACHE
+        self.dirty = True
         ELEMENT_LEVEL_CACHE = {}
         try:
             PROJECT_LEVELS_CACHE = list(FilteredElementCollector(doc).OfClass(Level))
@@ -582,22 +642,37 @@ class Cache(object):
         self.panels = {}
         self.circuits = []
         self.templates = {}
+        self.memberships = {}
+        self.circuit_details = {}
         cat_set = set()
         for panel in FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_ElectricalEquipment).WhereElementIsNotElementType():
-            self.panels[panel.Id.IntegerValue] = panel
+            self.panels[element_id_value(panel.Id)] = panel
             cat_set.add(category_name(panel))
         level_set = set([panel_level_name(p) for p in self.panels.values()])
         for es in FilteredElementCollector(doc).OfClass(ElectricalSystem):
             try:
-                if es.SystemType == ElectricalSystemType.PowerCircuit:
-                    self.circuits.append(es)
-            except Exception:
-                self.circuits.append(es)
+                is_power = es.SystemType == ElectricalSystemType.PowerCircuit
+            except Exception as ex:
+                LOGGER.warning("Skipping unreadable circuit system type: {0}".format(ex))
+                continue
+            if not is_power:
+                continue
+            self.circuits.append(es)
+            self.circuit_details[element_id_value(es.Id)] = (
+                get_panel_name(es.BaseEquipment, "<Unassigned>"),
+                circuit_number(es), get_load_name(es) or "-")
             try:
+                seen = set()
                 for el in es.Elements:
                     cat_set.add(category_name(el))
-            except Exception:
-                pass
+                    eid = element_id_value(el.Id)
+                    if eid not in seen:
+                        self.memberships.setdefault(eid, []).append(es)
+                        seen.add(eid)
+            except Exception as ex:
+                raise UserFacingError(
+                    "Could not read circuit membership. No action was run. "
+                    "Refresh and retry.\n{0}".format(ex))
         # Include levels from unassigned circuit fixtures so level filter can find dummy groups.
         # Only inspect unassigned circuits; scanning every assigned circuit is expensive in large models.
         for c in self.circuits:
@@ -614,6 +689,7 @@ class Cache(object):
         self.category_names = sorted([x for x in cat_set if x])
         for tpl in FilteredElementCollector(doc).OfClass(PanelScheduleTemplate):
             self.templates[safe_name(tpl)] = tpl
+        self.dirty = False
 
     def grouped(self):
         groups = {}
@@ -633,16 +709,7 @@ CACHE = Cache()
 
 
 def find_circuits_containing(eid_int):
-    result = []
-    for circuit in CACHE.circuits:
-        try:
-            for el in circuit.Elements:
-                if el.Id.IntegerValue == eid_int:
-                    result.append(circuit)
-                    break
-        except Exception:
-            pass
-    return result
+    return list(CACHE.memberships.get(eid_int, []))
 
 
 def elements_with_existing_circuits(element_ids):
@@ -657,7 +724,7 @@ def elements_with_existing_circuits(element_ids):
 def describe_existing_memberships(existing):
     lines = []
     for eid, circuits in existing:
-        el = doc.GetElement(ElementId(eid))
+        el = doc.GetElement(as_eid(eid))
         cn = ", ".join([circuit_number(c) for c in circuits])
         lines.append("- {0} is already on circuit(s): {1}".format(element_label(el) if el else eid, cn))
     return "\n".join(lines)
@@ -677,7 +744,7 @@ def validate_phase_compatibility(target_circuit, element_ids):
     target_phase = phase_class(target_circuit)
     conflicts = []
     for eid in element_ids:
-        el = doc.GetElement(ElementId(eid))
+        el = doc.GetElement(as_eid(eid))
         if el is None:
             continue
         el_phase = phase_class(el)
@@ -695,10 +762,12 @@ def validate_phase_compatibility(target_circuit, element_ids):
 
 
 class CircuitHubExternalEventHandler(IExternalEventHandler):
+    def __init__(self, window):
+        self.window = window
+
     def Execute(self, app):
         try:
-            if APP is not None:
-                APP.execute_pending_external_event()
+            self.window.execute_pending_external_event(app)
         except Exception:
             print(traceback.format_exc())
 
@@ -719,14 +788,19 @@ class CircuitHub(forms.WPFWindow):
         self.drag_hover_item = None
         self.alt_drag_preserved_tags = []
         self.pending_external_action = None
-        self.external_event_handler = CircuitHubExternalEventHandler()
+        self.executing = False
+        self.closed = False
+        self.document = doc
+        self.application = uidoc.Application.Application
+        self.document_change_subscribed = False
+        self.external_event_handler = CircuitHubExternalEventHandler(self)
         self.external_event = ExternalEvent.Create(self.external_event_handler)
         self.level_filter = self.settings.get("level_filter", "<All Levels>")
         self.category_filter_enabled = bool(self.settings.get("category_filter_enabled", True))
         self.allowed_categories = list(self.settings.get("allowed_categories", DEFAULT_ALLOWED_CATEGORIES))
         self.show_empty_panels = bool(self.settings.get("show_empty_panels", False))
         self.auto_refresh_enabled = bool(self.settings.get("auto_refresh_enabled", False))
-        self.building = False
+        self.building = True
         self.wire_events()
         self.Closed += self.on_closed
         self.PreviewKeyDown += self.on_preview_key_down
@@ -770,6 +844,8 @@ class CircuitHub(forms.WPFWindow):
         self.btnMoveSelectedCircuits.Click += self.on_move_selected_circuits
         self.btnRemoveSelectedFixtureRows.Click += self.on_remove_selected_fixture_rows
         self.btnRenameLoad.Click += self.on_rename_load
+        self.btnRenamePanel.Click += self.on_rename_panel
+        self.btnBulkRenamePanels.Click += self.on_bulk_rename_panels
         self.btnMoveTargetPanel.Click += self.on_move_target_panel
         self.btnPickPanelInView.Click += self.on_pick_panel_in_view_for_selected_fixture_circuits
         self.btnAddRevitSelection.Click += self.on_add_revit_selection
@@ -852,6 +928,7 @@ class CircuitHub(forms.WPFWindow):
         self.log("Saved category filter: {0}. Settings file: {1}.{2}".format(
             ", ".join(self.allowed_categories) if self.allowed_categories else "<none>", SETTINGS_FILE, "" if saved else " WARNING: settings did not save"))
 
+    @api_callback
     def on_apply_category_filter_to_selection(self, sender, args):
         try:
             self.filtered_revit_selection_ids("manual filter", require_nonempty=False)
@@ -860,7 +937,7 @@ class CircuitHub(forms.WPFWindow):
 
     def filtered_revit_selection_ids(self, action_name, require_nonempty=True):
         selected = list(uidoc.Selection.GetElementIds())
-        selected_ids = [x.IntegerValue for x in selected]
+        selected_ids = [element_id_value(x) for x in selected]
         if not selected_ids:
             if require_nonempty:
                 raise UserFacingError("Select element(s) in Revit first.")
@@ -872,7 +949,7 @@ class CircuitHub(forms.WPFWindow):
         allowed_ids = []
         rejected = []
         for eid in selected_ids:
-            el = doc.GetElement(ElementId(eid))
+            el = doc.GetElement(as_eid(eid))
             cname = category_name(el)
             if cname in allowed:
                 allowed_ids.append(eid)
@@ -911,6 +988,7 @@ class CircuitHub(forms.WPFWindow):
         except Exception:
             pass
 
+    @api_callback
     def on_level_filter_changed(self, sender, args):
         if self.building:
             return
@@ -921,6 +999,7 @@ class CircuitHub(forms.WPFWindow):
         self.save_current_settings()
         self.build_list()
 
+    @api_callback
     def on_show_empty_panels_changed(self, sender, args):
         if self.building:
             return
@@ -944,20 +1023,22 @@ class CircuitHub(forms.WPFWindow):
 
     def log(self, msg):
         try:
-            self.txtStatus.Text = str(msg)
-            self.lbLog.Items.Insert(0, str(msg))
+            self.txtStatus.Text = text_type(msg)
+            self.lbLog.Items.Insert(0, text_type(msg))
         except Exception:
             print(msg)
 
     def on_closed(self, sender, args):
         global DOC_CHANGED_HANDLER
+        self.closed = True
+        self.pending_external_action = None
         self.save_current_settings()
         try:
             if DOC_CHANGED_HANDLER is not None:
-                uidoc.Application.Application.DocumentChanged -= DOC_CHANGED_HANDLER
+                self.application.DocumentChanged -= DOC_CHANGED_HANDLER
                 DOC_CHANGED_HANDLER = None
         except Exception:
-            pass
+            LOGGER.error("Document change unsubscribe failed:\n" + traceback.format_exc())
 
     def on_preview_key_down(self, sender, args):
         try:
@@ -968,32 +1049,14 @@ class CircuitHub(forms.WPFWindow):
             pass
 
     def queue_refresh_from_doc_changed(self):
-        try:
-            # Performance guard: do not rebuild the full circuit cache on every Revit transaction
-            # unless the user explicitly enables auto-refresh. CircuitHub actions still refresh
-            # immediately after they complete.
-            if not self.auto_refresh_enabled:
-                return
-            if self.doc_refresh_pending:
-                return
-            self.doc_refresh_pending = True
-            def do_refresh():
-                self.doc_refresh_pending = False
-                try:
-                    CACHE.build()
-                    self.populate_level_filter()
-                    self.sync_category_filter_ui()
-                    self.build_list()
-                    self.log("Model changed / Undo-Redo detected: refreshed.")
-                except Exception:
-                    print(traceback.format_exc())
-            try:
-                self.Dispatcher.BeginInvoke(Action(do_refresh))
-            except Exception:
-                do_refresh()
-        except Exception:
-            print(traceback.format_exc())
+        CACHE.dirty = True
+        if (self.closed or self.executing or not self.auto_refresh_enabled
+                or self.pending_external_action is not None):
+            return
+        self.run_direct("auto_refresh", lambda: self.render_cache(),
+                        refresh=False, transaction=False)
 
+    @api_callback
     def on_undo_last(self, sender, args):
         try:
             cmd_id = RevitCommandId.LookupPostableCommandId(PostableCommand.Undo)
@@ -1006,11 +1069,18 @@ class CircuitHub(forms.WPFWindow):
             show_error("Circuit Hub Undo Error", traceback.format_exc())
 
     def on_close(self, sender, args): self.Close()
+    @api_callback
     def on_refresh(self, sender, args): self.refresh()
+    @api_callback
     def on_search_changed(self, sender, args): self.build_list()
 
     def refresh(self):
+        self.pending_select_tags = self.selected_tags()
         CACHE.build()
+        self.render_cache()
+
+    def render_cache(self):
+        self.building = True
         self.populate_level_filter()
         self.sync_category_filter_ui()
         self.build_list()
@@ -1067,7 +1137,7 @@ class CircuitHub(forms.WPFWindow):
         def panel_sort_key(x):
             if is_unassigned_panel_key(x):
                 return (1, x[1].lower())
-            return (0, safe_name(CACHE.panels.get(x)).lower())
+            return (0, get_panel_name(CACHE.panels.get(x)).lower())
         panel_keys.sort(key=panel_sort_key)
         if None in groups: panel_keys.append(None)
         active_level = self.level_filter or "<All Levels>"
@@ -1085,7 +1155,7 @@ class CircuitHub(forms.WPFWindow):
             if is_unassigned:
                 pname = unassigned_panel_label(pid)
             else:
-                pname = safe_name(CACHE.panels.get(pid), "<Unassigned>") if pid is not None else "<Unassigned>"
+                pname = get_panel_name(CACHE.panels.get(pid), "<Unassigned>") if pid is not None else "<Unassigned>"
             circuits = groups.get(pid, [])
             if not is_unassigned and not self.show_empty_panels and len(circuits) == 0:
                 continue
@@ -1102,17 +1172,17 @@ class CircuitHub(forms.WPFWindow):
             self.lbItems.Items.Add(self.make_item("{0} PANEL  {1} ({2})".format(picon, pname, len(visible)), panel_tag)); row_count += 1
             if panel_is_open:
                 for c in visible:
-                    cid = c.Id.IntegerValue
+                    cid = element_id_value(c.Id)
                     icon = "-" if cid in self.expanded_circuit_ids else "+"
                     self.lbItems.Items.Add(self.make_item("  {0} CIRCUIT  {1}".format(icon, circuit_label(c)), ("circuit", cid))); row_count += 1
                     if cid in self.expanded_circuit_ids:
                         try:
                             for el in c.Elements:
-                                self.lbItems.Items.Add(self.make_item("      FIXTURE  {0}".format(element_label(el)), ("element", el.Id.IntegerValue, cid))); row_count += 1
+                                self.lbItems.Items.Add(self.make_item("      FIXTURE  {0}".format(element_label(el)), ("element", element_id_value(el.Id), cid))); row_count += 1
                             self.lbItems.Items.Add(self.make_item("      Add selected fixture(s) from Revit view to this circuit", ("addrow", cid))); row_count += 1
                         except Exception: pass
-        self.building = False
         self.restore_pending_selection(); self.update_target_from_selection(); self.update_details()
+        self.building = False
         self.log("Loaded {0} rows across {1} visible panel(s). Level filter: {2}.".format(row_count, visible_panel_count, active_level))
 
     def selected_tags(self):
@@ -1165,27 +1235,27 @@ class CircuitHub(forms.WPFWindow):
     def target_circuit(self):
         if self.target_circuit_id is None:
             self.log("Click a circuit/fixture row first to set the TARGET circuit."); return None
-        c = doc.GetElement(ElementId(self.target_circuit_id))
+        c = doc.GetElement(as_eid(self.target_circuit_id))
         if c is None: self.log("Target circuit no longer exists. Refresh.")
         return c
 
     def update_details(self):
-        c = doc.GetElement(ElementId(self.target_circuit_id)) if self.target_circuit_id is not None else None
-        if c is None:
+        details = CACHE.circuit_details.get(self.target_circuit_id)
+        if details is None:
             self.txtPanel.Text = "Target panel: -"; self.txtCircuit.Text = "Target circuit: -"; self.txtLoad.Text = "Target load: -"
         else:
-            base = None
-            try: base = c.BaseEquipment
-            except Exception: pass
-            self.txtPanel.Text = "Target panel: " + (safe_name(base, "<Unassigned>") if base else "<Unassigned>")
-            self.txtCircuit.Text = "Target circuit: " + circuit_number(c)
-            self.txtLoad.Text = "Target load: " + (get_load_name(c) or "-")
+            panel_name, number, load = details
+            self.txtPanel.Text = "Target panel: " + panel_name
+            self.txtCircuit.Text = "Target circuit: " + number
+            self.txtLoad.Text = "Target load: " + load
         try:
             self.txtSelectedSummary.Text = "Highlighted rows: {0} circuit row(s), {1} fixture row(s).".format(len([t for t in self.selected_tags() if t[0]=='circuit']), len(self.selected_element_ids()))
         except Exception: pass
 
+    @api_callback
     def on_list_double_click(self, sender, args): self.toggle_expand_selected()
 
+    @api_callback
     def on_expand_selected(self, sender, args):
         for tag in self.selected_tags():
             if tag[0] == "panel": self.expanded_panel_ids.add(tag[1])
@@ -1195,6 +1265,7 @@ class CircuitHub(forms.WPFWindow):
             elif tag[0] == "addrow": self.expanded_circuit_ids.add(tag[1])
         self.build_list()
 
+    @api_callback
     def on_collapse_selected(self, sender, args):
         for tag in self.selected_tags():
             if tag[0] == "panel" and tag[1] in self.expanded_panel_ids: self.expanded_panel_ids.remove(tag[1])
@@ -1217,18 +1288,23 @@ class CircuitHub(forms.WPFWindow):
                 changed = True
         if changed: self.build_list()
 
+    @api_callback
     def on_show_all_panels(self, sender, args):
         for pid in CACHE.grouped().keys(): self.expanded_panel_ids.add(pid)
         self.build_list()
 
+    @api_callback
     def on_show_target_only(self, sender, args):
         if self.target_circuit_id is None: self.log("Click a target circuit first."); return
         self.expanded_panel_ids.clear(); self.expanded_circuit_ids.clear()
-        c = doc.GetElement(ElementId(self.target_circuit_id))
+        c = doc.GetElement(as_eid(self.target_circuit_id))
         if c:
-            self.expanded_panel_ids.add(panel_id_of(c)); self.expanded_circuit_ids.add(self.target_circuit_id); self.pending_select_tags = [("circuit", self.target_circuit_id)]
+            pid = panel_id_of(c)
+            self.expanded_panel_ids.add(unassigned_key_for_circuit(c) if pid is None else pid)
+            self.expanded_circuit_ids.add(self.target_circuit_id); self.pending_select_tags = [("circuit", self.target_circuit_id)]
         self.build_list()
 
+    @api_callback
     def on_locate_revit_selection(self, sender, args):
         selected = self.current_revit_selection_ids(False)
         if not selected: self.log("Select fixture(s) in Revit first, then click Locate selection."); return
@@ -1236,8 +1312,10 @@ class CircuitHub(forms.WPFWindow):
         found = 0
         for eid in selected:
             for c in find_circuits_containing(eid):
-                cid = c.Id.IntegerValue
-                self.expanded_panel_ids.add(panel_id_of(c)); self.expanded_circuit_ids.add(cid); self.pending_select_tags.append(("element", eid, cid)); self.target_circuit_id = cid; found += 1
+                cid = element_id_value(c.Id)
+                pid = panel_id_of(c)
+                self.expanded_panel_ids.add(unassigned_key_for_circuit(c) if pid is None else pid)
+                self.expanded_circuit_ids.add(cid); self.pending_select_tags.append(("element", eid, cid)); self.target_circuit_id = cid; found += 1
         if found == 0: self.log("Selected Revit element(s) were not found on any listed circuit."); return
         self.build_list(); self.log("Located {0} Revit-selected fixture/circuit link(s) in the tool.".format(found))
 
@@ -1376,6 +1454,13 @@ class CircuitHub(forms.WPFWindow):
             if not dragged:
                 self.log("Nothing was dragged.")
                 return
+            self.process_drop(target, dragged)
+        except Exception:
+            show_error("Circuit Hub Drag Error", traceback.format_exc())
+
+    @api_callback
+    def process_drop(self, target, dragged):
+        try:
             circuit_ids = [t[1] for t in dragged if t[0] == "circuit"]
             fixture_ids = [t[1] for t in dragged if t[0] == "element"]
 
@@ -1396,16 +1481,16 @@ class CircuitHub(forms.WPFWindow):
                     self.log("Alt-drag reassign cancelled.")
                     return
                 def work():
-                    target_circuit = doc.GetElement(ElementId(target_cid))
+                    target_circuit = doc.GetElement(as_eid(target_cid))
                     validate_phase_compatibility(target_circuit, fixture_ids)
                     removed = 0
                     added = 0
                     for eid in fixture_ids:
-                        fixture = doc.GetElement(ElementId(eid))
+                        fixture = doc.GetElement(as_eid(eid))
                         if fixture is None:
                             continue
                         for old_circuit in find_circuits_containing(eid):
-                            if old_circuit.Id.IntegerValue == target_cid:
+                            if element_id_value(old_circuit.Id) == target_cid:
                                 continue
                             es_old = ElementSet(); es_old.Insert(fixture)
                             old_circuit.RemoveFromCircuit(es_old)
@@ -1423,33 +1508,61 @@ class CircuitHub(forms.WPFWindow):
 
     # ---------------- ExternalEvent action engine ----------------
     def run_direct(self, name, work, refresh=True, transaction=True):
+        if self.closed:
+            return
+        if self.executing:
+            msg = run_transaction(name, work) if transaction else work()
+            if refresh:
+                self.refresh()
+            if msg:
+                self.log(msg)
+            return
         try:
             if self.pending_external_action is not None:
                 show_warning("Circuit Hub", "Another Circuit Hub action is already queued."); return
             self.pending_external_action = (name, work, refresh, transaction)
-            self.external_event.Raise(); self.log("Queued: " + name)
+            result = self.external_event.Raise()
+            if result not in (ExternalEventRequest.Accepted, ExternalEventRequest.Pending):
+                raise UserFacingError("Revit could not queue the action: {0}".format(result))
+            self.log("Queued: " + name)
         except Exception:
             self.pending_external_action = None; show_error("Circuit Hub Error", traceback.format_exc())
 
-    def execute_pending_external_event(self):
+    def execute_pending_external_event(self, app):
+        global uidoc
         action = self.pending_external_action; self.pending_external_action = None
-        if action is None: return
+        if action is None or self.closed: return
         name, work, refresh, use_transaction = action
         try:
+            active = app.ActiveUIDocument
+            if not self.document.IsValidObject:
+                raise UserFacingError("The original project was closed. Close CircuitHub and reopen it in the desired project.")
+            if active is None or not self.document.Equals(active.Document):
+                raise UserFacingError("Switch back to the project where CircuitHub was opened, or close and reopen CircuitHub in this project.")
+            uidoc = active
+            self.executing = True
+            if name != "on_refresh" and (CACHE.dirty or not self.document_change_subscribed):
+                CACHE.build()
             msg = run_transaction(name, work) if use_transaction else work()
-            self.log(msg)
             if refresh: self.refresh()
+            if msg: self.log(msg)
+        except OperationCanceledException:
+            self.log("Cancelled: " + name)
         except UserFacingError as ex:
-            show_warning("Circuit Hub", str(ex)); self.log("Blocked: " + name)
+            show_warning("Circuit Hub", text_type(ex)); self.log("Blocked: " + name)
         except Exception as ex:
             clean_msg = clean_revit_validation_message(str(ex))
             if clean_msg: show_warning("Circuit Hub", clean_msg); self.log("Blocked by Revit validation: " + name); return
             err = traceback.format_exc(); print(err); show_error("Circuit Hub Error", err); self.log("FAILED: " + name)
+        finally:
+            self.executing = False
+            self.building = False
 
     def pick_panel_id(self):
         names = []; lookup = {}
-        for pid in sorted(CACHE.panels.keys(), key=lambda x: safe_name(CACHE.panels[x]).lower()):
-            name = safe_name(CACHE.panels[pid]); names.append(name); lookup[name] = pid
+        for pid in sorted(CACHE.panels.keys(), key=lambda x: get_panel_name(CACHE.panels[x]).lower()):
+            name = "{0} (id {1})".format(get_panel_name(CACHE.panels[pid]), pid)
+            names.append(name); lookup[name] = pid
         if not names: self.log("No electrical equipment found."); return None
         picked = forms.SelectFromList.show(names, title="Select panel", button_name="Select", multiselect=False)
         return lookup.get(picked) if picked else None
@@ -1461,13 +1574,87 @@ class CircuitHub(forms.WPFWindow):
 
     def current_revit_selection_ids(self, apply_filter=True, action_name="action"):
         if apply_filter: return self.filtered_revit_selection_ids(action_name, True)
-        return [x.IntegerValue for x in list(uidoc.Selection.GetElementIds())]
+        return [element_id_value(x) for x in list(uidoc.Selection.GetElementIds())]
 
     # ---------------- Button handlers ----------------
+    def panels_for_rename(self, single=False):
+        ids = sorted(set(tag[1] for tag in self.selected_tags()
+                         if tag[0] == "panel" and tag[1] is not None))
+        if not ids or (single and len(ids) != 1):
+            raise UserFacingError(
+                "Highlight {0} real PANEL row(s), not circuit, fixture, or unassigned rows. "
+                "Enable Show empty panels if needed.".format("exactly one" if single else "one or more"))
+        panels = [doc.GetElement(as_eid(pid)) for pid in ids]
+        for panel in panels:
+            panel_name_parameter(panel)
+        return panels
+
+    @api_callback
+    def on_rename_panel(self, sender, args):
+        panel = self.panels_for_rename(single=True)[0]
+        current = panel_name_parameter(panel).AsString() or ""
+        name = forms.ask_for_string(default=current, prompt="New Panel Name",
+                                    title="Rename Panel")
+        if name is None:
+            self.log("Panel rename cancelled.")
+            return
+        self.rename_panels([(element_id_value(panel.Id), name)])
+
+    @api_callback
+    def on_bulk_rename_panels(self, sender, args):
+        panels = self.panels_for_rename()
+        proposals = []
+        for panel in panels:
+            current = panel_name_parameter(panel).AsString() or ""
+            name = bulk_panel_name(current, self.tbPanelFind.Text or "",
+                                   self.tbPanelReplace.Text or "",
+                                   self.tbPanelPrefix.Text or "",
+                                   self.tbPanelSuffix.Text or "")
+            proposals.append((element_id_value(panel.Id), name))
+        self.rename_panels(proposals)
+
+    def rename_panels(self, proposals):
+        names = {}
+        for panel in CACHE.panels.values():
+            param = panel.get_Parameter(BuiltInParameter.RBS_ELEC_PANEL_NAME)
+            if param is not None and param.StorageType == StorageType.String:
+                names[element_id_value(panel.Id)] = param.AsString() or ""
+        try:
+            changes = panel_rename_plan(names, proposals)
+        except ValueError as ex:
+            raise UserFacingError(text_type(ex))
+        if not changes:
+            self.log("Panel names are unchanged. No transaction was created.")
+            return
+        preview = "\n".join("{0} (id {1}) -> {2}".format(old or "<blank>", pid, new)
+                            for pid, old, new in changes)
+        if not forms.alert(
+                "Rename {0} panel(s)?\nExpand the details to review all old and new names.\n"
+                "All changes use one undoable transaction.".format(len(changes)),
+                title="Confirm Panel Rename", expanded=preview, yes=True, no=True, ok=False):
+            self.log("Panel rename cancelled.")
+            return
+
+        def work():
+            parameters = [(panel_name_parameter(doc.GetElement(as_eid(pid))), old, new)
+                          for pid, old, new in changes]
+            for param, old, new in parameters:
+                if (param.AsString() or "") != old:
+                    raise UserFacingError("A panel name changed after preview. Refresh and retry.")
+            for param, old, new in parameters:
+                if not param.Set(new):
+                    raise UserFacingError(
+                        "Revit refused Panel Name '{0}'. The rename action was rolled back.".format(new))
+            return "Renamed {0} panel(s).".format(len(changes))
+        self.run_direct("Rename Panels", work, True)
+
+    @api_callback
     def on_inline_remove_fixture(self, sender, args):
         tag = sender.Tag
-        if tag and tag[0] == "element": self.remove_fixture_ids_from_circuits([tag[1]], "inline_remove_fixture")
+        if tag and tag[0] == "element":
+            self.remove_fixture_rows([tag], "inline_remove_fixture")
 
+    @api_callback
     def on_inline_add_to_circuit(self, sender, args):
         tag = sender.Tag
         if tag[0] == "circuit": cid = tag[1]
@@ -1478,13 +1665,13 @@ class CircuitHub(forms.WPFWindow):
     def add_or_reassign_selection_to_circuit(self, target_cid, transaction_name):
         selected_ids = self.current_revit_selection_ids(True, "add/reassign selected fixture(s) to circuit")
         def work():
-            target_circuit = doc.GetElement(ElementId(target_cid)); validate_phase_compatibility(target_circuit, selected_ids)
+            target_circuit = doc.GetElement(as_eid(target_cid)); validate_phase_compatibility(target_circuit, selected_ids)
             removed = 0; added = 0
             for eid in selected_ids:
-                fixture = doc.GetElement(ElementId(eid))
+                fixture = doc.GetElement(as_eid(eid))
                 if fixture is None: continue
                 for old_circuit in find_circuits_containing(eid):
-                    if old_circuit.Id.IntegerValue == target_cid: continue
+                    if element_id_value(old_circuit.Id) == target_cid: continue
                     es_old = ElementSet(); es_old.Insert(fixture); old_circuit.RemoveFromCircuit(es_old); removed += 1
                 es_new = ElementSet(); es_new.Insert(fixture); target_circuit.AddToCircuit(es_new); added += 1
             self.target_circuit_id = target_cid
@@ -1495,26 +1682,44 @@ class CircuitHub(forms.WPFWindow):
         def work():
             removed = 0
             for eid in fixture_ids:
-                fixture = doc.GetElement(ElementId(eid))
+                fixture = doc.GetElement(as_eid(eid))
                 if fixture is None: continue
                 for c in find_circuits_containing(eid):
                     es = ElementSet(); es.Insert(fixture); c.RemoveFromCircuit(es); removed += 1
             return "Removed {0} fixture-circuit link(s).".format(removed)
         self.run_direct(transaction_name, work, True)
 
+    def remove_fixture_rows(self, tags, transaction_name):
+        links = set((tag[1], tag[2]) for tag in tags if tag[0] == "element")
+        def work():
+            for eid, cid in links:
+                fixture = doc.GetElement(as_eid(eid))
+                circuit = doc.GetElement(as_eid(cid))
+                if fixture is None or circuit is None:
+                    raise UserFacingError("A highlighted fixture or circuit no longer exists. Refresh and retry.")
+                if cid not in [element_id_value(c.Id) for c in find_circuits_containing(eid)]:
+                    raise UserFacingError("A highlighted fixture is no longer on its displayed circuit. Refresh and retry.")
+                elements = ElementSet()
+                elements.Insert(fixture)
+                circuit.RemoveFromCircuit(elements)
+            return "Removed {0} displayed fixture-circuit link(s).".format(len(links))
+        self.run_direct(transaction_name, work, True)
+
+    @api_callback
     def on_remove_revit_selection_from_all_circuits(self, sender, args):
         selected_ids = self.current_revit_selection_ids(True, "remove selected fixture(s) from all circuits")
         self.remove_fixture_ids_from_circuits(selected_ids, "remove_selection_from_all_circuits")
 
+    @api_callback
     def on_select_rows_in_view(self, sender, args):
         ids = List[ElementId](); count = 0
         for cid in self.selected_circuit_ids():
-            c = doc.GetElement(ElementId(cid))
+            c = doc.GetElement(as_eid(cid))
             if c:
                 try:
                     for el in c.Elements: ids.Add(el.Id); count += 1
                 except Exception: pass
-        for eid in self.selected_element_ids(): ids.Add(ElementId(eid)); count += 1
+        for eid in self.selected_element_ids(): ids.Add(as_eid(eid)); count += 1
         if count == 0: self.log("Highlight circuit/fixture rows first."); return
         uidoc.Selection.SetElementIds(ids)
         try: uidoc.ShowElements(ids)
@@ -1525,10 +1730,10 @@ class CircuitHub(forms.WPFWindow):
         unique = []
         for cid in circuit_ids:
             if cid not in unique: unique.append(cid)
-        panel = doc.GetElement(ElementId(panel_id_value)); panel_name = safe_name(panel, "<selected panel>") if panel else "<selected panel>"
+        panel = doc.GetElement(as_eid(panel_id_value)); panel_name = get_panel_name(panel, "<selected panel>") if panel else "<selected panel>"
         to_move = []; already = []
         for cid in unique:
-            c = doc.GetElement(ElementId(cid))
+            c = doc.GetElement(as_eid(cid))
             if c is None: continue
             if circuit_is_on_panel(c, panel_id_value): already.append(cid)
             else: to_move.append(cid)
@@ -1537,17 +1742,18 @@ class CircuitHub(forms.WPFWindow):
         if already: msg += "\n\nSkipped because already on target panel: {0}".format(len(already))
         if str(MessageBox.Show(msg, title, MessageBoxButton.YesNo, MessageBoxImage.Warning)) != "Yes": return
         def work():
-            panel = doc.GetElement(ElementId(panel_id_value))
+            panel = doc.GetElement(as_eid(panel_id_value))
             if panel is None: raise UserFacingError("Selected panel no longer exists.")
             moved = 0; skipped_now = 0
             for cid in to_move:
-                c = doc.GetElement(ElementId(cid))
+                c = doc.GetElement(as_eid(cid))
                 if c is None: continue
                 if circuit_is_on_panel(c, panel_id_value): skipped_now += 1; continue
                 c.SelectPanel(panel); moved += 1; self.target_circuit_id = cid
-            return "Moved {0} circuit(s) to panel {1}. Skipped {2} already on target.".format(moved, safe_name(panel), len(already) + skipped_now)
+            return "Moved {0} circuit(s) to panel {1}. Skipped {2} already on target.".format(moved, get_panel_name(panel), len(already) + skipped_now)
         self.run_direct("move_circuits_to_panel", work, True)
 
+    @api_callback
     def on_move_selected_circuits(self, sender, args):
         circuit_ids = self.selected_circuit_ids()
         if not circuit_ids: self.log("Highlight one or more circuit rows first."); return
@@ -1555,30 +1761,34 @@ class CircuitHub(forms.WPFWindow):
         if pid is None: return
         self.move_circuit_ids_to_panel(circuit_ids, pid, "Move Highlighted Circuits")
 
+    @api_callback
     def on_remove_selected_fixture_rows(self, sender, args):
         eids = self.selected_element_ids()
         if not eids: self.log("Highlight one or more fixture rows first."); return
-        self.remove_fixture_ids_from_circuits(eids, "remove_highlighted_fixture_rows")
+        self.remove_fixture_rows(self.selected_tags(), "remove_highlighted_fixture_rows")
 
+    @api_callback
     def on_rename_load(self, sender, args):
         c = self.target_circuit()
         if c is None: return
         new_name = forms.ask_for_string(default=get_load_name(c), prompt="New load name", title="Rename Load")
         if new_name is None: return
-        cid = c.Id.IntegerValue
+        cid = element_id_value(c.Id)
         def work():
-            c2 = doc.GetElement(ElementId(cid))
+            c2 = doc.GetElement(as_eid(cid))
             if not set_load_name(c2, new_name): raise UserFacingError("Load Name is read-only.")
             return "Renamed target load to: {0}".format(new_name)
         self.run_direct("rename_load", work, True)
 
+    @api_callback
     def on_move_target_panel(self, sender, args):
         c = self.target_circuit()
         if c is None: return
         pid = self.pick_panel_id()
         if pid is None: return
-        self.move_circuit_ids_to_panel([c.Id.IntegerValue], pid, "Move Target Circuit")
+        self.move_circuit_ids_to_panel([element_id_value(c.Id)], pid, "Move Target Circuit")
 
+    @api_callback
     def on_pick_panel_in_view_for_selected_fixture_circuits(self, sender, args):
         """Move circuits found from selected Revit fixtures to a panel picked in the model view."""
         selected_ids = self.current_revit_selection_ids(True, "move selected fixture circuits to picked panel")
@@ -1588,7 +1798,7 @@ class CircuitHub(forms.WPFWindow):
             circuits = find_circuits_containing(eid)
             if circuits:
                 for c in circuits:
-                    cid = c.Id.IntegerValue
+                    cid = element_id_value(c.Id)
                     if cid not in circuit_ids:
                         circuit_ids.append(cid)
             else:
@@ -1599,18 +1809,23 @@ class CircuitHub(forms.WPFWindow):
             return
 
         def work_no_tx():
-            picked = uidoc.Selection.PickObject(ObjectType.Element, ElectricalEquipmentSelectionFilter(), "Pick the panel to move the selected fixture circuit(s) to")
+            self.Hide()
+            try:
+                picked = uidoc.Selection.PickObject(ObjectType.Element, ElectricalEquipmentSelectionFilter(), "Pick the panel to move the selected fixture circuit(s) to")
+            finally:
+                if not self.closed:
+                    self.Show()
             if picked is None:
                 return "Panel pick cancelled."
             panel = doc.GetElement(picked.ElementId)
             if panel is None:
                 raise UserFacingError("The picked panel could not be resolved.")
-            panel_id_value = panel.Id.IntegerValue
-            panel_name = safe_name(panel, "<picked panel>")
+            panel_id_value = element_id_value(panel.Id)
+            panel_name = get_panel_name(panel, "<picked panel>")
             to_move = []
             already = []
             for cid in circuit_ids:
-                c = doc.GetElement(ElementId(cid))
+                c = doc.GetElement(as_eid(cid))
                 if c is None:
                     continue
                 if circuit_is_on_panel(c, panel_id_value):
@@ -1634,7 +1849,7 @@ class CircuitHub(forms.WPFWindow):
                 moved = 0
                 skipped_now = 0
                 for cid in to_move:
-                    c = doc.GetElement(ElementId(cid))
+                    c = doc.GetElement(as_eid(cid))
                     if c is None:
                         continue
                     if circuit_is_on_panel(c, panel_id_value):
@@ -1647,13 +1862,14 @@ class CircuitHub(forms.WPFWindow):
             return run_transaction("move_selected_fixture_circuits_to_picked_panel", tx_work)
         self.run_direct("pick_panel_in_view_for_selected_fixture_circuits", work_no_tx, True, transaction=False)
 
+    @api_callback
     def on_add_revit_selection(self, sender, args):
         target = self.target_circuit()
         if target is None: return
         selected_ids = self.current_revit_selection_ids(True, "add to circuit")
-        target_cid = target.Id.IntegerValue
+        target_cid = element_id_value(target.Id)
         def work():
-            c = doc.GetElement(ElementId(target_cid)); validate_phase_compatibility(c, selected_ids)
+            c = doc.GetElement(as_eid(target_cid)); validate_phase_compatibility(c, selected_ids)
             existing = elements_with_existing_circuits(selected_ids)
             if existing: raise UserFacingError("Add is only for uncircuited fixtures. Use Reassign for fixtures already on circuits.\n" + describe_existing_memberships(existing))
             es, count = element_set_from_ids(selected_ids)
@@ -1662,11 +1878,13 @@ class CircuitHub(forms.WPFWindow):
             return "Added {0} uncircuited selected fixture(s) to target circuit {1}.".format(count, circuit_number(c))
         self.run_direct("add_uncircuited_revit_selection", work, True)
 
+    @api_callback
     def on_reassign_revit_selection(self, sender, args):
         target = self.target_circuit()
         if target is None: return
-        self.add_or_reassign_selection_to_circuit(target.Id.IntegerValue, "reassign_revit_selection")
+        self.add_or_reassign_selection_to_circuit(element_id_value(target.Id), "reassign_revit_selection")
 
+    @api_callback
     def on_move_existing_circuits_to_panel(self, sender, args):
         selected_ids = self.current_revit_selection_ids(True, "move existing circuits to panel")
         panel_id_value, used_tool_panel = self.choose_target_panel_id()
@@ -1677,15 +1895,15 @@ class CircuitHub(forms.WPFWindow):
             circuits = find_circuits_containing(eid)
             if circuits:
                 for c in circuits:
-                    cid = c.Id.IntegerValue
+                    cid = element_id_value(c.Id)
                     if cid not in selected_existing_circuit_ids: selected_existing_circuit_ids.append(cid)
             else: uncircuited_ids.append(eid)
         if not selected_existing_circuit_ids:
             show_warning("Circuit Hub", "None of the allowed selected elements are currently on circuits. No circuits were moved."); return
-        panel = doc.GetElement(ElementId(panel_id_value)); panel_name = safe_name(panel, "<selected panel>") if panel else "<selected panel>"
+        panel = doc.GetElement(as_eid(panel_id_value)); panel_name = get_panel_name(panel, "<selected panel>") if panel else "<selected panel>"
         to_move = []; already = []
         for cid in selected_existing_circuit_ids:
-            c = doc.GetElement(ElementId(cid))
+            c = doc.GetElement(as_eid(cid))
             if c is None: continue
             if circuit_is_on_panel(c, panel_id_value): already.append(cid)
             else: to_move.append(cid)
@@ -1696,24 +1914,26 @@ class CircuitHub(forms.WPFWindow):
         if str(MessageBox.Show(msg, "Move Existing Circuits To Panel", MessageBoxButton.YesNo, MessageBoxImage.Warning)) != "Yes": return
         self.move_circuit_ids_to_panel(to_move, panel_id_value, "Move Existing Circuits To Panel")
 
+    @api_callback
     def on_remove_revit_selection(self, sender, args):
         target = self.target_circuit()
         if target is None: return
         selected_ids = self.current_revit_selection_ids(True, "remove from target circuit")
-        target_cid = target.Id.IntegerValue
+        target_cid = element_id_value(target.Id)
         def work():
-            c = doc.GetElement(ElementId(target_cid)); es, count = element_set_from_ids(selected_ids)
+            c = doc.GetElement(as_eid(target_cid)); es, count = element_set_from_ids(selected_ids)
             if count == 0: raise UserFacingError("No valid selected elements found.")
             c.RemoveFromCircuit(es)
             return "Removed {0} selected fixture(s) from target circuit {1}.".format(count, circuit_number(c))
         self.run_direct("remove_revit_selection_from_target", work, True)
 
+    @api_callback
     def on_create_circuit(self, sender, args):
         selected_ids = self.current_revit_selection_ids(True, "new circuit")
         target_panel_id = self.selected_panel_id_from_tool()
         target_panel_name = None
         if target_panel_id is not None:
-            panel = doc.GetElement(ElementId(target_panel_id)); target_panel_name = safe_name(panel, "<selected panel>") if panel else "<selected panel>"
+            panel = doc.GetElement(as_eid(target_panel_id)); target_panel_name = get_panel_name(panel, "<selected panel>") if panel else "<selected panel>"
         existing = elements_with_existing_circuits(selected_ids)
         remove_existing = False
         if existing:
@@ -1726,34 +1946,36 @@ class CircuitHub(forms.WPFWindow):
             removed = 0
             if remove_existing:
                 for eid, circuits in existing:
-                    fixture = doc.GetElement(ElementId(eid))
+                    fixture = doc.GetElement(as_eid(eid))
                     if fixture is None: continue
                     for old_circuit in circuits:
                         es_old = ElementSet(); es_old.Insert(fixture); old_circuit.RemoveFromCircuit(es_old); removed += 1
             c = ElectricalSystem.Create(doc, id_list(selected_ids), ElectricalSystemType.PowerCircuit)
             assigned = None
             if target_panel_id is not None:
-                panel = doc.GetElement(ElementId(target_panel_id))
+                panel = doc.GetElement(as_eid(target_panel_id))
                 if panel is None: raise UserFacingError("The highlighted target panel no longer exists.")
-                c.SelectPanel(panel); assigned = safe_name(panel)
-            self.target_circuit_id = c.Id.IntegerValue
+                c.SelectPanel(panel); assigned = get_panel_name(panel)
+            self.target_circuit_id = element_id_value(c.Id)
             if assigned:
                 return "Created circuit {0} with {1} selected element(s), assigned to panel {2}. Removed {3} old link(s).".format(circuit_number(c), len(selected_ids), assigned, removed)
             return "Created circuit {0} with {1} selected element(s). Removed {2} old link(s).".format(circuit_number(c), len(selected_ids), removed)
         self.run_direct("create_circuit", work, True)
 
+    @api_callback
     def on_create_schedule(self, sender, args):
         pid = self.pick_panel_id()
         if pid is None: return
         def work():
-            view = PanelScheduleView.CreateInstanceView(doc, ElementId(pid))
+            view = PanelScheduleView.CreateInstanceView(doc, as_eid(pid))
             return "Created panel schedule: {0}".format(safe_name(view))
         self.run_direct("create_schedule", work, False)
 
 
 def on_revit_document_changed(sender, args):
     try:
-        if APP is not None: APP.queue_refresh_from_doc_changed()
+        if APP is not None and not APP.closed and APP.document.Equals(args.GetDocument()):
+            APP.queue_refresh_from_doc_changed()
     except Exception: print(traceback.format_exc())
 
 
@@ -1761,13 +1983,17 @@ def main():
     global APP, DOC_CHANGED_HANDLER
     if doc is None or doc.IsFamilyDocument:
         MessageBox.Show("Open a Revit project document before running Circuit Hub.", "Circuit Hub", MessageBoxButton.OK, MessageBoxImage.Warning); return
+    if APP is not None and not APP.closed:
+        APP.Close()
     APP = CircuitHub()
     try:
         DOC_CHANGED_HANDLER = on_revit_document_changed
         uidoc.Application.Application.DocumentChanged += DOC_CHANGED_HANDLER
+        APP.document_change_subscribed = True
         APP.log("Document change listener active. Auto-refresh is controlled by the toolbar checkbox.")
     except Exception:
         APP.log("Auto-refresh subscription failed; use Refresh manually if needed.")
     APP.Show()
 
-main()
+if __name__ == "__main__":
+    main()
