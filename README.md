@@ -26,10 +26,11 @@ alert. Requirements and lessons learned are in its `CONTEXT.md`.
 `Route Cable Along Tray` (Electrical panel) is also a **scaffold only**; it will route a circuit
 path along cable trays and report cable length. See its `CONTEXT.md`.
 
-`CircuitHub` (Electrical panel) is an existing, working tool imported as-is for managing circuits
-and panels (modeless window: `script.py` + `ui.xaml`). It is not yet reviewed against this repo's
-patterns; improvements are planned (see its `CONTEXT.md` for the roadmap, e.g. virtual panels and
-panel create/rename/level editing). It writes a per-user `circuit_hub_settings.json` (git-ignored).
+`CircuitHub` (Electrical panel) uses the v11.3 files imported as-is from `Circuit Test` for managing
+circuits and panels (modeless window: `script.py` + `ui.xaml`). It includes category filtering,
+inline add/remove actions, unassigned circuits grouped by fixture level, and panel picking in the
+view. Settings are stored in `%APPDATA%/CircuitHub/circuit_hub_settings.json`. Known review findings
+and planned improvements are in its `CONTEXT.md`; Revit validation is still required.
 
 ```text
 CustomPyRevit.extension/
