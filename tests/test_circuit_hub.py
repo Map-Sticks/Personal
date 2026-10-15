@@ -82,6 +82,32 @@ class RenameLogicTests(unittest.TestCase):
             logic.element_id_value(Broken())
 
 
+class FamilyTypeLogicTests(unittest.TestCase):
+    PAIRS = [("Panelboard", "225A"), ("panelboard MLO", "100A"), ("Panelboard", "400A"),
+             ("Switchboard", "225A")]
+
+    def test_options_are_sorted_and_types_follow_family(self):
+        families, types = logic.family_type_options(self.PAIRS)
+        self.assertEqual(["Panelboard", "panelboard MLO", "Switchboard"], families)
+        self.assertEqual(["100A", "225A", "400A"], types)
+        self.assertEqual(["225A", "400A"], logic.family_type_options(self.PAIRS, "Panelboard")[1])
+        self.assertEqual([], logic.family_type_options(self.PAIRS, "Missing")[1])
+
+    def test_matching_and_active_state(self):
+        all_f, all_t = logic.ALL_FAMILIES, logic.ALL_TYPES
+        self.assertFalse(logic.family_type_filter_active(all_f, all_t))
+        self.assertFalse(logic.family_type_filter_active(None, ""))
+        self.assertTrue(logic.family_type_filter_active(all_f, "225A"))
+        self.assertTrue(logic.matches_family_type("Panelboard", "225A", all_f, all_t))
+        self.assertTrue(logic.matches_family_type("Switchboard", "225A", all_f, "225A"))
+        self.assertFalse(logic.matches_family_type("Panelboard", "400A", "Panelboard", "225A"))
+        self.assertFalse(logic.matches_family_type("Switchboard", "225A", "Panelboard", all_t))
+
+    def test_panel_row_text_includes_name_count_family_and_type(self):
+        self.assertEqual("+ PANEL  DB-1 (3)   |   Panelboard : 225A",
+                         logic.panel_row_text("+", "DB-1", 3, "Panelboard", "225A"))
+
+
 class CircuitHubTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -439,6 +465,135 @@ class CircuitHubTests(unittest.TestCase):
         self.window.build_list = Mock()
         self.window.on_show_target_only(None, None)
         self.assertEqual({("unassigned", "<No Level>")}, self.window.expanded_panel_ids)
+
+    def use_fake_id_list(self):
+        class FakeList(list):
+            def Add(self, item):
+                self.append(item)
+        self.mod.List = {self.mod.ElementId: FakeList}
+
+    def test_panel_family_and_type_prefers_type_and_falls_back_to_parameters(self):
+        symbol = SimpleNamespace(FamilyName="Panelboard", Name="225A", Id=Id(9))
+        panel = SimpleNamespace(Id=Id(1), GetTypeId=lambda: Id(9))
+        self.doc.GetElement = lambda eid: symbol
+        self.assertEqual(("Panelboard", "225A"), self.mod.panel_family_and_type(panel))
+        self.doc.GetElement = lambda eid: None
+        self.mod.BuiltInParameter.ELEM_FAMILY_PARAM = "family"
+        self.mod.BuiltInParameter.ELEM_TYPE_PARAM = "type"
+        params = {"family": Mock(**{"AsValueString.return_value": "Fam"}), "type": None}
+        panel.get_Parameter = lambda bip: params[bip]
+        self.assertEqual(("Fam", "<No Type>"), self.mod.panel_family_and_type(panel))
+
+    def build_rows(self, family_filter, type_filter, search=""):
+        class Items(list):
+            Clear = list.clear
+            Add = list.append
+        unassigned = SimpleNamespace(Id=Id(50), BaseEquipment=None, CircuitNumber="1",
+                                     Elements=[], get_Parameter=lambda bip: None)
+        on_a = SimpleNamespace(Id=Id(60), BaseEquipment=self.panels[1], CircuitNumber="2",
+                               Elements=[], get_Parameter=lambda bip: None)
+        self.mod.CACHE.circuits = [unassigned, on_a]
+        self.mod.CACHE.panel_family_types = {1: ("Panelboard", "225A"), 2: ("Switchboard", "400A")}
+        self.mod.CACHE.memberships = {}
+        self.mod.panel_level_name = lambda panel: "L1"
+        self.mod.circuit_level_name = lambda circuit: "L1"
+        w = self.window
+        w.lbItems = SimpleNamespace(Items=Items(), SelectedItems=[])
+        w.make_item = lambda text, tag: SimpleNamespace(text=text, Tag=tag)
+        w.tbSearch = SimpleNamespace(Text=search)
+        for name in ("txtPanel", "txtCircuit", "txtLoad", "txtSelectedSummary"):
+            setattr(w, name, SimpleNamespace(Text=""))
+        w.selected_tags = Mock(return_value=[])
+        w.pending_select_tags = []
+        w.target_circuit_id = None
+        w.expanded_panel_ids = set()
+        w.expanded_circuit_ids = set()
+        w.level_filter = "<All Levels>"
+        w.show_empty_panels = True
+        w.family_filter = family_filter
+        w.type_filter = type_filter
+        w.build_list()
+        return [item.text for item in w.lbItems.Items]
+
+    def test_panel_rows_show_family_type_and_filters_hide_other_panels(self):
+        rows = self.build_rows(self.mod.ALL_FAMILIES, self.mod.ALL_TYPES)
+        self.assertEqual(["+ PANEL  A (1)   |   Panelboard : 225A",
+                          "+ PANEL  B (0)   |   Switchboard : 400A",
+                          "+ PANEL  UNASSIGNED / NO PANEL - L1 (1)"], rows)
+        self.assertEqual(["+ PANEL  B (0)   |   Switchboard : 400A"],
+                         self.build_rows("Switchboard", self.mod.ALL_TYPES))
+        self.assertEqual(["+ PANEL  A (1)   |   Panelboard : 225A"],
+                         self.build_rows(self.mod.ALL_FAMILIES, "225A"))
+        self.assertEqual([], self.build_rows("Panelboard", "400A"))
+
+    def test_search_matches_panel_family_or_type(self):
+        rows = self.build_rows(self.mod.ALL_FAMILIES, self.mod.ALL_TYPES, search="switchboard")
+        self.assertEqual(["- PANEL  B (0)   |   Switchboard : 400A"], rows)
+
+    def test_select_panels_in_model_selects_real_panels_without_moving_view(self):
+        self.use_fake_id_list()
+        self.uidoc.ShowElements = Mock()
+        self.window.selected_tags = Mock(return_value=[
+            ("panel", 2), ("unassigned_panel", ("unassigned", "L1")), ("circuit", 20), ("panel", 2)])
+        self.window.executing = True
+        self.window.on_select_panels_in_model(None, None)
+        ids = self.uidoc.Selection.SetElementIds.call_args.args[0]
+        self.assertEqual([2], [x.Value for x in ids])
+        self.uidoc.ShowElements.assert_not_called()
+
+    def test_show_panels_in_view_selects_and_shows(self):
+        self.use_fake_id_list()
+        self.uidoc.ShowElements = Mock()
+        self.window.executing = True
+        self.window.on_show_panels_in_view(None, None)
+        shown = self.uidoc.ShowElements.call_args.args[0]
+        self.assertEqual([1, 2], [x.Value for x in shown])
+        self.uidoc.Selection.SetElementIds.assert_called_once_with(shown)
+
+    def test_panel_actions_without_panel_rows_warn_and_do_nothing(self):
+        self.window.selected_tags = Mock(return_value=[("unassigned_panel", ("unassigned", "L1"))])
+        self.window.on_select_panels_in_model(None, None)
+        self.window.execute_pending_external_event(self.app)
+        self.mod.show_warning.assert_called_once()
+        self.uidoc.Selection.SetElementIds.assert_not_called()
+
+    def test_rows_select_in_revit_includes_highlighted_panels(self):
+        self.use_fake_id_list()
+        self.uidoc.ShowElements = Mock()
+        self.window.selected_tags = Mock(return_value=[("panel", 1)])
+        self.window.executing = True
+        self.window.on_select_rows_in_view(None, None)
+        self.assertEqual([1], [x.Value for x in self.uidoc.Selection.SetElementIds.call_args.args[0]])
+        self.uidoc.ShowElements.assert_called_once()
+
+    def test_type_combo_follows_family_and_resets_missing_saved_type(self):
+        class Items(list):
+            Clear = list.clear
+            Add = list.append
+
+            @property
+            def Count(self):
+                return len(self)
+
+        class Combo:
+            def __init__(self):
+                self.Items = Items()
+                self.SelectedIndex = 0
+
+            @property
+            def SelectedItem(self):
+                return self.Items[self.SelectedIndex]
+        families, types = Combo(), Combo()
+        self.window.cmbFamilyFilter, self.window.cmbTypeFilter = families, types
+        self.window.building = False
+        self.mod.CACHE.panel_family_types = {1: ("Panelboard", "225A"), 2: ("Switchboard", "400A")}
+        self.window.family_filter, self.window.type_filter = "Panelboard", "400A"
+        self.window.populate_family_type_filters()
+        self.assertEqual(["<All Families>", "Panelboard", "Switchboard"], families.Items)
+        self.assertEqual(["<All Types>", "225A"], types.Items)
+        self.assertEqual(1, families.SelectedIndex)
+        self.assertEqual(("Panelboard", "<All Types>"), (self.window.family_filter, self.window.type_filter))
+        self.assertFalse(self.window.building)
 
     def test_xaml_has_all_wired_controls_and_handlers(self):
         root = ET.parse(BUNDLE / "ui.xaml").getroot()

@@ -10,7 +10,8 @@
   </Window.Resources>
   <Grid Margin="10">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="110"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-    <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="True">
+    <StackPanel Grid.Row="0" Margin="0,0,0,8">
+    <DockPanel Margin="0,0,0,6" LastChildFill="True">
       <Button Name="btnRefresh" Content="Refresh" Width="80" Margin="0,0,6,0" DockPanel.Dock="Left"/>
       <Button Name="btnUndoLast" Content="Undo last" Width="85" Margin="0,0,6,0" DockPanel.Dock="Left"/>
       <Button Name="btnLocateRevitSelection" Content="Locate selection" Width="120" Margin="0,0,6,0" DockPanel.Dock="Left"/>
@@ -19,13 +20,21 @@
       <Button Name="btnExpandSelected" Content="Expand" Width="75" Margin="0,0,6,0" DockPanel.Dock="Left"/>
       <Button Name="btnCollapseSelected" Content="Collapse" Width="80" Margin="0,0,12,0" DockPanel.Dock="Left"/>
       <Button Name="btnClose" Content="Close" Width="70" Margin="8,0,0,0" DockPanel.Dock="Right"/>
-      <TextBlock Text="Level:" VerticalAlignment="Center" Margin="8,0,6,0" DockPanel.Dock="Left"/>
-      <ComboBox Name="cmbLevelFilter" Width="170" Margin="0,0,8,0" DockPanel.Dock="Left"/>
       <CheckBox Name="chkShowEmptyPanels" Content="Show empty panels" VerticalAlignment="Center" Margin="0,0,8,0" DockPanel.Dock="Left"/>
       <CheckBox Name="chkAutoRefresh" Content="Auto refresh" VerticalAlignment="Center" Margin="0,0,12,0" DockPanel.Dock="Left"/>
       <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,6,0" DockPanel.Dock="Left"/>
-      <TextBox Name="tbSearch" VerticalContentAlignment="Center"/>
+      <TextBox Name="tbSearch" VerticalContentAlignment="Center" ToolTip="Matches panel name, panel family/type, or circuit"/>
     </DockPanel>
+    <StackPanel Orientation="Horizontal">
+      <TextBlock Text="Level:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+      <ComboBox Name="cmbLevelFilter" Width="170" Margin="0,0,12,0"/>
+      <TextBlock Text="Panel family:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+      <ComboBox Name="cmbFamilyFilter" Width="260" Margin="0,0,12,0" ToolTip="Show only panels of this family. Hides unassigned groups while active."/>
+      <TextBlock Text="Panel type:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+      <ComboBox Name="cmbTypeFilter" Width="220" Margin="0,0,12,0" ToolTip="Types of the selected family (or all families)."/>
+      <Button Name="btnClearPanelFilters" Content="Clear filters" Width="90"/>
+    </StackPanel>
+    </StackPanel>
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="560"/><ColumnDefinition Width="8"/><ColumnDefinition Width="520" MinWidth="500"/></Grid.ColumnDefinitions>
       <GroupBox Grid.Column="0" Header="Panels / Circuits / Fixtures - yellow groups = powered circuits with no panel, grouped by fixture level; Auto refresh can be off for large models">
@@ -39,12 +48,14 @@
           <TextBlock Name="txtCircuit" Text="Target circuit: -" TextWrapping="Wrap" Margin="0,0,0,2"/>
           <TextBlock Name="txtLoad" Text="Target load: -" TextWrapping="Wrap" Margin="0,0,0,8"/>
           <UniformGrid Columns="2" Margin="0,0,0,8">
-            <Button Name="btnSelectRowsInView" Content="Rows: Select in Revit" Height="30" Margin="2"/>
+            <Button Name="btnSelectRowsInView" Content="Rows: Select in Revit" Height="30" Margin="2" ToolTip="Select and show highlighted panels, circuit fixtures, and fixture rows in Revit."/>
             <Button Name="btnMoveSelectedCircuits" Content="Rows: Move circuits" Height="30" Margin="2"/>
             <Button Name="btnRemoveSelectedFixtureRows" Content="Rows: Remove fixtures" Height="30" Margin="2"/>
             <Button Name="btnRenameLoad" Content="Target: Rename load" Height="30" Margin="2"/>
             <Button Name="btnMoveTargetPanel" Content="Target: Move via list" Height="30" Margin="2"/>
             <Button Name="btnCreateSchedule" Content="Create panel schedule" Height="30" Margin="2"/>
+            <Button Name="btnSelectPanelsInModel" Content="Panels: Select in model" Height="30" Margin="2" ToolTip="Select highlighted panel rows in Revit without changing the view, then edit them in the Properties palette."/>
+            <Button Name="btnShowPanelsInView" Content="Panels: Show in Revit" Height="30" Margin="2" ToolTip="Select highlighted panel rows and move the Revit view to show them."/>
           </UniformGrid>
           <TextBlock Text="Revit selection actions" FontWeight="Bold" Margin="0,8,0,4"/>
           <UniformGrid Columns="1">
@@ -61,6 +72,7 @@
           <TextBlock Text="Rename panels" FontWeight="Bold" Margin="0,0,0,6"/>
           <TextBlock Text="Highlight real PANEL rows in the tree. Enable Show empty panels to include panels without circuits. Unassigned groups are not panels." TextWrapping="Wrap" Margin="0,0,0,8"/>
           <Button Name="btnRenamePanel" Content="Rename one highlighted panel..." Height="32" Margin="0,0,0,12"/>
+          <TextBlock Text="To edit other panel properties, highlight panel rows and use Actions &gt; Panels: Select in model, then use the Revit Properties palette." TextWrapping="Wrap" Foreground="#555" Margin="0,0,0,12"/>
           <TextBlock Text="Bulk rename highlighted panels" FontWeight="Bold" Margin="0,0,0,6"/>
           <TextBlock Text="Find (literal, case-sensitive; blank skips replacement)"/>
           <TextBox Name="tbPanelFind" Margin="0,4,0,8"/>

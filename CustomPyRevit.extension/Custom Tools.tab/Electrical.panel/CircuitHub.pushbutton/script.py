@@ -10,6 +10,8 @@ import json
 import traceback
 from functools import wraps
 from circuit_hub_logic import element_id_value, panel_rename_plan, bulk_panel_name, text_type
+from circuit_hub_logic import (ALL_FAMILIES, ALL_TYPES, family_type_options, family_type_filter_active,
+                               matches_family_type, panel_row_text)
 
 import clr
 clr.AddReference("RevitAPI")
@@ -70,7 +72,9 @@ def default_settings():
         "category_filter_enabled": True,
         "allowed_categories": list(DEFAULT_ALLOWED_CATEGORIES),
         "show_empty_panels": False,
-        "auto_refresh_enabled": False
+        "auto_refresh_enabled": False,
+        "family_filter": ALL_FAMILIES,
+        "type_filter": ALL_TYPES
     }
 
 
@@ -609,6 +613,33 @@ def phase_class(el):
     return None
 
 
+def panel_family_and_type(panel):
+    """Return (family name, type name) for an equipment instance, with readable fallbacks."""
+    family = ""
+    type_name = ""
+    el_type = element_type(panel)
+    if el_type is not None:
+        try:
+            family = el_type.FamilyName or ""
+        except Exception:
+            family = ""
+        type_name = safe_name(el_type, "")
+    if not family or not type_name:
+        for bip_name, is_family in (("ELEM_FAMILY_PARAM", True), ("ELEM_TYPE_PARAM", False)):
+            if (family if is_family else type_name):
+                continue
+            try:
+                p = panel.get_Parameter(getattr(BuiltInParameter, bip_name))
+                txt = (p.AsValueString() or "") if p else ""
+            except Exception:
+                txt = ""
+            if is_family:
+                family = txt
+            else:
+                type_name = txt
+    return (family or "<No Family>", type_name or "<No Type>")
+
+
 def phase_text(value):
     if value == 1:
         return "single-phase"
@@ -622,6 +653,7 @@ def phase_text(value):
 class Cache(object):
     def __init__(self):
         self.panels = {}
+        self.panel_family_types = {}
         self.circuits = []
         self.templates = {}
         self.level_names = []
@@ -640,6 +672,7 @@ class Cache(object):
         except Exception:
             PROJECT_LEVELS_CACHE = []
         self.panels = {}
+        self.panel_family_types = {}
         self.circuits = []
         self.templates = {}
         self.memberships = {}
@@ -647,6 +680,7 @@ class Cache(object):
         cat_set = set()
         for panel in FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_ElectricalEquipment).WhereElementIsNotElementType():
             self.panels[element_id_value(panel.Id)] = panel
+            self.panel_family_types[element_id_value(panel.Id)] = panel_family_and_type(panel)
             cat_set.add(category_name(panel))
         level_set = set([panel_level_name(p) for p in self.panels.values()])
         for es in FilteredElementCollector(doc).OfClass(ElectricalSystem):
@@ -690,6 +724,14 @@ class Cache(object):
         for tpl in FilteredElementCollector(doc).OfClass(PanelScheduleTemplate):
             self.templates[safe_name(tpl)] = tpl
         self.dirty = False
+
+    def family_type_of(self, panel_id):
+        found = self.panel_family_types.get(panel_id)
+        if found is None:
+            panel = self.panels.get(panel_id)
+            found = panel_family_and_type(panel) if panel is not None else ("<No Family>", "<No Type>")
+            self.panel_family_types[panel_id] = found
+        return found
 
     def grouped(self):
         groups = {}
@@ -796,6 +838,8 @@ class CircuitHub(forms.WPFWindow):
         self.external_event_handler = CircuitHubExternalEventHandler(self)
         self.external_event = ExternalEvent.Create(self.external_event_handler)
         self.level_filter = self.settings.get("level_filter", "<All Levels>")
+        self.family_filter = self.settings.get("family_filter", ALL_FAMILIES) or ALL_FAMILIES
+        self.type_filter = self.settings.get("type_filter", ALL_TYPES) or ALL_TYPES
         self.category_filter_enabled = bool(self.settings.get("category_filter_enabled", True))
         self.allowed_categories = list(self.settings.get("allowed_categories", DEFAULT_ALLOWED_CATEGORIES))
         self.show_empty_panels = bool(self.settings.get("show_empty_panels", False))
@@ -806,6 +850,7 @@ class CircuitHub(forms.WPFWindow):
         self.PreviewKeyDown += self.on_preview_key_down
         CACHE.build()
         self.populate_level_filter()
+        self.populate_family_type_filters()
         self.sync_category_filter_ui()
         self.build_list()
         self.log("Circuit Hub ready. Category filter is {0}. Empty panels are {1}. Auto-refresh is {2}. Loaded categories: {3}. Settings file: {4}".format(
@@ -825,6 +870,9 @@ class CircuitHub(forms.WPFWindow):
         self.btnClose.Click += self.on_close
         self.tbSearch.TextChanged += self.on_search_changed
         self.cmbLevelFilter.SelectionChanged += self.on_level_filter_changed
+        self.cmbFamilyFilter.SelectionChanged += self.on_family_filter_changed
+        self.cmbTypeFilter.SelectionChanged += self.on_type_filter_changed
+        self.btnClearPanelFilters.Click += self.on_clear_panel_filters
         self.chkShowEmptyPanels.Checked += self.on_show_empty_panels_changed
         self.chkShowEmptyPanels.Unchecked += self.on_show_empty_panels_changed
         self.chkAutoRefresh.Checked += self.on_auto_refresh_changed
@@ -841,6 +889,8 @@ class CircuitHub(forms.WPFWindow):
         self.lbItems.DragLeave += self.on_drag_leave
         self.lbItems.MouseDoubleClick += self.on_list_double_click
         self.btnSelectRowsInView.Click += self.on_select_rows_in_view
+        self.btnSelectPanelsInModel.Click += self.on_select_panels_in_model
+        self.btnShowPanelsInView.Click += self.on_show_panels_in_view
         self.btnMoveSelectedCircuits.Click += self.on_move_selected_circuits
         self.btnRemoveSelectedFixtureRows.Click += self.on_remove_selected_fixture_rows
         self.btnRenameLoad.Click += self.on_rename_load
@@ -860,6 +910,8 @@ class CircuitHub(forms.WPFWindow):
     def save_current_settings(self):
         return save_settings({
             "level_filter": self.level_filter or "<All Levels>",
+            "family_filter": self.family_filter or ALL_FAMILIES,
+            "type_filter": self.type_filter or ALL_TYPES,
             "category_filter_enabled": bool(self.category_filter_enabled),
             "allowed_categories": list(self.allowed_categories or []),
             "show_empty_panels": bool(self.show_empty_panels),
@@ -999,6 +1051,77 @@ class CircuitHub(forms.WPFWindow):
         self.save_current_settings()
         self.build_list()
 
+    def fill_combo(self, combo, first, values, current):
+        combo.Items.Clear()
+        combo.Items.Add(first)
+        selected_index = 0
+        for value in values:
+            combo.Items.Add(value)
+            if value == current:
+                selected_index = combo.Items.Count - 1
+        combo.SelectedIndex = selected_index
+        return str(combo.SelectedItem)
+
+    def populate_family_type_filters(self, types_only=False):
+        """Fill Family/Type combos; a saved choice missing from this model falls back to All."""
+        was_building = self.building
+        self.building = True
+        try:
+            if not types_only:
+                families, _ = family_type_options(CACHE.panel_family_types.values())
+                self.family_filter = self.fill_combo(
+                    self.cmbFamilyFilter, ALL_FAMILIES, families, self.family_filter or ALL_FAMILIES)
+            _, types = family_type_options(CACHE.panel_family_types.values(), self.family_filter)
+            self.type_filter = self.fill_combo(
+                self.cmbTypeFilter, ALL_TYPES, types, self.type_filter or ALL_TYPES)
+        except Exception:
+            LOGGER.warning("Family/type filter population failed:\n" + traceback.format_exc())
+        finally:
+            self.building = was_building
+
+    def family_type_filter_summary(self):
+        if not family_type_filter_active(self.family_filter, self.type_filter):
+            return "Family/type filter: off"
+        return "Family: {0}; Type: {1}".format(self.family_filter or ALL_FAMILIES, self.type_filter or ALL_TYPES)
+
+    @api_callback
+    def on_family_filter_changed(self, sender, args):
+        if self.building:
+            return
+        try:
+            self.family_filter = str(self.cmbFamilyFilter.SelectedItem) if self.cmbFamilyFilter.SelectedItem else ALL_FAMILIES
+        except Exception:
+            self.family_filter = ALL_FAMILIES
+        self.populate_family_type_filters(types_only=True)
+        self.save_current_settings()
+        self.build_list()
+
+    @api_callback
+    def on_type_filter_changed(self, sender, args):
+        if self.building:
+            return
+        try:
+            self.type_filter = str(self.cmbTypeFilter.SelectedItem) if self.cmbTypeFilter.SelectedItem else ALL_TYPES
+        except Exception:
+            self.type_filter = ALL_TYPES
+        self.save_current_settings()
+        self.build_list()
+
+    @api_callback
+    def on_clear_panel_filters(self, sender, args):
+        self.level_filter = "<All Levels>"
+        self.family_filter = ALL_FAMILIES
+        self.type_filter = ALL_TYPES
+        was_building = self.building
+        self.building = True
+        try:
+            self.populate_level_filter()
+        finally:
+            self.building = was_building
+        self.populate_family_type_filters()
+        self.save_current_settings()
+        self.build_list()
+
     @api_callback
     def on_show_empty_panels_changed(self, sender, args):
         if self.building:
@@ -1082,6 +1205,7 @@ class CircuitHub(forms.WPFWindow):
     def render_cache(self):
         self.building = True
         self.populate_level_filter()
+        self.populate_family_type_filters()
         self.sync_category_filter_ui()
         self.build_list()
 
@@ -1141,9 +1265,19 @@ class CircuitHub(forms.WPFWindow):
         panel_keys.sort(key=panel_sort_key)
         if None in groups: panel_keys.append(None)
         active_level = self.level_filter or "<All Levels>"
+        family_filter = self.family_filter or ALL_FAMILIES
+        type_filter = self.type_filter or ALL_TYPES
+        family_type_active = family_type_filter_active(family_filter, type_filter)
         row_count = 0; visible_panel_count = 0
         for pid in panel_keys:
             is_unassigned = is_unassigned_panel_key(pid)
+            # Unassigned groups have no family/type, so a family/type filter hides them.
+            if family_type_active and (is_unassigned or pid is None):
+                continue
+            if family_type_active:
+                pfamily, ptype = CACHE.family_type_of(pid)
+                if not matches_family_type(pfamily, ptype, family_filter, type_filter):
+                    continue
             if active_level != "<All Levels>":
                 if is_unassigned:
                     if pid[1] != active_level:
@@ -1161,7 +1295,13 @@ class CircuitHub(forms.WPFWindow):
                 continue
             circuits.sort(key=circuit_sort_key)
             visible = []
-            panel_match = flt in pname.lower() if flt else True
+            if is_unassigned or pid is None:
+                pfamily = ptype = None
+                panel_search_text = pname
+            else:
+                pfamily, ptype = CACHE.family_type_of(pid)
+                panel_search_text = u"{0} {1} {2}".format(pname, pfamily, ptype)
+            panel_match = flt in panel_search_text.lower() if flt else True
             for c in circuits:
                 if not flt or panel_match or flt in circuit_label(c).lower(): visible.append(c)
             if flt and not panel_match and not visible: continue
@@ -1169,7 +1309,11 @@ class CircuitHub(forms.WPFWindow):
             panel_is_open = (pid in self.expanded_panel_ids) or bool(flt)
             picon = "-" if panel_is_open else "+"
             panel_tag = ("unassigned_panel", pid) if is_unassigned else ("panel", pid)
-            self.lbItems.Items.Add(self.make_item("{0} PANEL  {1} ({2})".format(picon, pname, len(visible)), panel_tag)); row_count += 1
+            if pfamily is None:
+                panel_text = "{0} PANEL  {1} ({2})".format(picon, pname, len(visible))
+            else:
+                panel_text = panel_row_text(picon, pname, len(visible), pfamily, ptype)
+            self.lbItems.Items.Add(self.make_item(panel_text, panel_tag)); row_count += 1
             if panel_is_open:
                 for c in visible:
                     cid = element_id_value(c.Id)
@@ -1183,7 +1327,8 @@ class CircuitHub(forms.WPFWindow):
                         except Exception: pass
         self.restore_pending_selection(); self.update_target_from_selection(); self.update_details()
         self.building = False
-        self.log("Loaded {0} rows across {1} visible panel(s). Level filter: {2}.".format(row_count, visible_panel_count, active_level))
+        self.log("Loaded {0} rows across {1} visible panel(s). Level filter: {2}. {3}.".format(
+            row_count, visible_panel_count, active_level, self.family_type_filter_summary()))
 
     def selected_tags(self):
         tags = []
@@ -1710,9 +1855,50 @@ class CircuitHub(forms.WPFWindow):
         selected_ids = self.current_revit_selection_ids(True, "remove selected fixture(s) from all circuits")
         self.remove_fixture_ids_from_circuits(selected_ids, "remove_selection_from_all_circuits")
 
+    def selected_real_panel_ids(self):
+        result = []
+        for tag in self.selected_tags():
+            if tag and tag[0] == "panel" and tag[1] is not None and tag[1] not in result:
+                result.append(tag[1])
+        return result
+
+    def panel_ids_for_selection(self):
+        pids = self.selected_real_panel_ids()
+        if not pids:
+            raise UserFacingError("Highlight one or more real PANEL rows first. Unassigned groups are not panels.")
+        existing = [pid for pid in pids if doc.GetElement(as_eid(pid)) is not None]
+        if not existing:
+            raise UserFacingError("The highlighted panel(s) no longer exist. Refresh and retry.")
+        return existing
+
+    def panel_selection_label(self, pids):
+        names = [get_panel_name(doc.GetElement(as_eid(pid))) for pid in pids]
+        shown = ", ".join(names[:5])
+        return shown + (" (+{0} more)".format(len(names) - 5) if len(names) > 5 else "")
+
+    @api_callback
+    def on_select_panels_in_model(self, sender, args):
+        pids = self.panel_ids_for_selection()
+        uidoc.Selection.SetElementIds(id_list(pids))
+        self.log("Selected {0} panel(s) in Revit: {1}. Edit them in the Properties palette (the view was not changed).".format(
+            len(pids), self.panel_selection_label(pids)))
+
+    @api_callback
+    def on_show_panels_in_view(self, sender, args):
+        pids = self.panel_ids_for_selection()
+        ids = id_list(pids)
+        uidoc.Selection.SetElementIds(ids)
+        try:
+            uidoc.ShowElements(ids)
+        except Exception as ex:
+            self.log("Selected {0} panel(s), but Revit could not show them: {1}".format(len(pids), ex)); return
+        self.log("Showing {0} panel(s) in Revit: {1}.".format(len(pids), self.panel_selection_label(pids)))
+
     @api_callback
     def on_select_rows_in_view(self, sender, args):
         ids = List[ElementId](); count = 0
+        for pid in self.selected_real_panel_ids():
+            if doc.GetElement(as_eid(pid)) is not None: ids.Add(as_eid(pid)); count += 1
         for cid in self.selected_circuit_ids():
             c = doc.GetElement(as_eid(cid))
             if c:
@@ -1720,7 +1906,7 @@ class CircuitHub(forms.WPFWindow):
                     for el in c.Elements: ids.Add(el.Id); count += 1
                 except Exception: pass
         for eid in self.selected_element_ids(): ids.Add(as_eid(eid)); count += 1
-        if count == 0: self.log("Highlight circuit/fixture rows first."); return
+        if count == 0: self.log("Highlight panel/circuit/fixture rows first."); return
         uidoc.Selection.SetElementIds(ids)
         try: uidoc.ShowElements(ids)
         except Exception: pass

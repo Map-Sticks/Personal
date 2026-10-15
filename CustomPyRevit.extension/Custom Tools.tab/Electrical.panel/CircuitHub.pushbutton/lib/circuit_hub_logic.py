@@ -48,3 +48,37 @@ def bulk_panel_name(name, find="", replace="", prefix="", suffix=""):
     if find:
         name = name.replace(find, replace)
     return prefix + name + suffix
+
+
+ALL_FAMILIES = "<All Families>"
+ALL_TYPES = "<All Types>"
+
+
+def family_type_options(family_types, family_filter=ALL_FAMILIES):
+    """Return sorted (families, types); types are limited to the chosen family."""
+    families = set()
+    types = set()
+    for family, type_name in family_types:
+        families.add(family)
+        if family_filter in (None, "", ALL_FAMILIES) or family == family_filter:
+            types.add(type_name)
+    return (sorted(families, key=lambda x: x.lower()),
+            sorted(types, key=lambda x: x.lower()))
+
+
+def family_type_filter_active(family_filter, type_filter):
+    return (family_filter not in (None, "", ALL_FAMILIES)
+            or type_filter not in (None, "", ALL_TYPES))
+
+
+def matches_family_type(family, type_name, family_filter, type_filter):
+    if family_filter not in (None, "", ALL_FAMILIES) and family != family_filter:
+        return False
+    if type_filter not in (None, "", ALL_TYPES) and type_name != type_filter:
+        return False
+    return True
+
+
+def panel_row_text(icon, panel_name, circuit_count, family, type_name):
+    return u"{0} PANEL  {1} ({2})   |   {3} : {4}".format(
+        icon, panel_name, circuit_count, family, type_name)

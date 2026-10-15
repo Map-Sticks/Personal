@@ -32,6 +32,20 @@ The **Panels** tab edits the built-in **Panel Name** parameter, not the family/t
 - Empty equipment remains accessible through **Show empty panels**. Unassigned groups are not
   real panels and cannot be renamed.
 
+## Panel family/type filter and panel selection
+
+- Panel rows read `<Panel Name> (<circuit count>)   |   <Family> : <Type>`. Family comes from
+  `ElementType.FamilyName`, type from the type name, with `ELEM_FAMILY_PARAM`/`ELEM_TYPE_PARAM`
+  fallbacks, and is cached per refresh. Search also matches family and type text.
+- The second toolbar row holds **Level**, **Panel family** and **Panel type** filters plus
+  **Clear filters**. The type list follows the chosen family (all types when family is All). A
+  saved family/type missing from the current model falls back to All. While a family or type
+  filter is active, unassigned (no-panel) groups are hidden. Filters are saved in settings.
+- **Actions > Panels: Select in model** selects highlighted real panel rows without changing the
+  view so they can be edited in the Properties palette. **Panels: Show in Revit** selects them and
+  calls `UIDocument.ShowElements`. **Rows: Select in Revit** now also includes highlighted panel
+  rows (the panel element itself, not its fixtures). Unassigned groups are ignored.
+
 ## Author's wishes for the next version (priority)
 
 1. **Virtual / "invisible" panels.** Move away from having to place a physical panel family
@@ -97,6 +111,10 @@ Online references checked for this increment:
 - [Document.IsValidObject](https://www.revitapidocs.com/2025/41477e88-aa81-4648-aa8b-8f2d482d4705.htm),
   [ExternalEvent.Raise](https://www.revitapidocs.com/2025/13bf4411-c400-dcd2-458c-7f09357d9ecb.htm),
   and [ExternalEventRequest outcomes](https://www.revitapidocs.com/2025/f3a47284-4a83-d8f7-8d97-8235de7be1ba.htm).
+- [ElementType.FamilyName, since 2015](https://www.revitapidocs.com/2024/10de5c66-1b4b-9214-4036-27a6b24e5703.htm)
+  and [UIDocument.ShowElements(ICollection)](https://www.revitapidocs.com/2025/4c3aaa9a-679a-b49a-f162-48e199cc5b4b.htm)
+  ("places all the elements on the screen by moving the view"). Whether the Properties palette
+  edits a panel selected while hidden in the active view is not documented; confirm in Revit.
 - pyRevit transaction wrapper implementations at
   [4.8.16](https://github.com/pyrevitlabs/pyRevit/blob/v4.8.16.24121%2B2117/pyrevitlib/pyrevit/revit/db/transaction.py)
   and [6.5.5](https://github.com/pyrevitlabs/pyRevit/blob/v6.5.5.26237%2B2044/pyrevitlib/pyrevit/revit/db/transaction.py).
@@ -135,7 +153,13 @@ Run the mock checks with `python -m unittest discover -s tests -v`.
 7. On an unassigned circuit, test **Target only** and **Locate selection**. For a fixture with
    multiple power-circuit memberships, inline `-` and **Rows: Remove fixtures** must remove only
    the displayed/highlighted link. The explicit remove-from-all action must still remove all.
-8. Regression-test circuit moves, Alt-drag, load rename, circuit creation, category filtering,
+8. Check panel rows show `Family : Type`. Choose a **Panel family**, then a **Panel type**; only
+   matching panels remain, unassigned groups disappear, and **Clear filters** restores everything.
+   Close and reopen CircuitHub to confirm the filters persist. Highlight a panel in a view where it
+   is not visible and click **Panels: Select in model**: confirm the view does not change and the
+   Properties palette shows that panel and allows edits. Click **Panels: Show in Revit**: Revit
+   should move/open a view showing it. Test multi-panel highlights and **Rows: Select in Revit**.
+9. Regression-test circuit moves, Alt-drag, load rename, circuit creation, category filtering,
    schedules and panel picking (including Escape). Highlighting a row must not block the next
    action. Model/API context, WPF wiring, actual electrical validation and Undo require Revit;
    Linux syntax checks and mocks cannot establish those results.

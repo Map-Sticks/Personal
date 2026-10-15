@@ -30,6 +30,8 @@ path along cable trays and report cable length. See its `CONTEXT.md`.
 supports single-panel rename and bulk literal find/replace with prefixes/suffixes, a confirmation
 preview, duplicate-name checks, and one undoable transaction. It also includes category filtering,
 row-specific add/remove actions, unassigned circuits grouped by fixture level, and panel picking.
+Panel rows show the panel family and type, can be filtered by level, family and type, and can be
+selected in the model (for the Properties palette) or shown in Revit directly from the list.
 Model-access actions are routed through ExternalEvent with document guards and indexed circuit
 memberships. Settings are stored in `%APPDATA%/CircuitHub/circuit_hub_settings.json`.
 Virtual panels, panel creation, and level editing remain future work. See
