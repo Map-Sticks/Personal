@@ -38,6 +38,12 @@ Virtual panels, panel creation, and level editing remain future work. See
 [CircuitHub context and Revit acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CircuitHub.pushbutton/CONTEXT.md);
 actual Revit validation is still required.
 
+`Parameter Browser` (Electrical panel) is a read-only, modeless window that lists Spaces or Rooms
+with chosen parameter columns. It filters by whole project, current view (as of the last refresh) or
+level, searches across the visible columns, and can select or show the highlighted rows in Revit. All
+Revit reads and selection changes run through ExternalEvent; the window itself only uses cached data.
+Settings are stored in `%APPDATA%/pyRevit/ParameterBrowser.settings.json`.
+
 ```text
 CustomPyRevit.extension/
 └── Custom Tools.tab/
@@ -49,6 +55,13 @@ CustomPyRevit.extension/
     │   │   │   └── circuit_hub_logic.py
     │   │   ├── script.py
     │   │   └── ui.xaml
+    │   ├── ParameterBrowser.pushbutton/
+    │   │   ├── bundle.yaml
+    │   │   ├── lib/
+    │   │   │   └── parameter_browser_logic.py
+    │   │   ├── README.txt
+    │   │   ├── script.py
+    │   │   └── UI.xaml
     │   ├── Place Ceiling Devices.pushbutton/
     │   │   ├── CONTEXT.md
     │   │   ├── bundle.yaml
@@ -141,3 +154,13 @@ wiring. They do not run Revit or IronPython. Run all repository checks with
 `python -m unittest discover -s tests -v`, then follow the
 [CircuitHub acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CircuitHub.pushbutton/CONTEXT.md#revit-acceptance-checks-disposable-project)
 in a disposable Revit project.
+
+## Check Parameter Browser
+
+```sh
+python -m unittest discover -s tests -p test_parameter_browser.py -v
+```
+
+These tests cover settings, column resolution, scope and search filtering, value formatting, XAML
+handler wiring, and that selection and parameter reads only happen inside the ExternalEvent handler
+(with document and closed-window guards). Revit must still confirm the WPF window and API behaviour.

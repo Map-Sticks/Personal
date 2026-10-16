@@ -1,5 +1,5 @@
-title: Parameter Browser
-tooltip: Modeless searchable parameter browser for Spaces and Rooms.
+title: Parameter\nBrowser
+tooltip: Modeless, searchable browser for Space and Room parameters. Select or show rows in Revit. Read-only.
 author: Jacques-Michael Oosthuizen / Microsoft Copilot
 engine:
   persistent: true
