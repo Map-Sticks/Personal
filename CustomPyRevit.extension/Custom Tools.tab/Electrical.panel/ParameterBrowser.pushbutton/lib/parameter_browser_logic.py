@@ -6,6 +6,20 @@ SCOPES = ["Whole project", "Current view", "Level"]
 DEFAULT_FIELDS = ["Number", "Name", "Level", "Department"]
 PSEUDO_FIELDS = ["Element Id", "Category", "Level"]
 ID_COLUMN = "__id"
+COUNT_PREFIX = "Count: "
+# (display label, BuiltInCategory member name) for elements listed inside a Space/Room.
+CONTENT_CATEGORIES = [
+    ("Lighting Fixtures", "OST_LightingFixtures"),
+    ("Electrical Fixtures", "OST_ElectricalFixtures"),
+    ("Electrical Equipment", "OST_ElectricalEquipment"),
+    ("Lighting Devices", "OST_LightingDevices"),
+    ("Fire Alarm Devices", "OST_FireAlarmDevices"),
+    ("Communication Devices", "OST_CommunicationDevices"),
+    ("Data Devices", "OST_DataDevices"),
+    ("Security Devices", "OST_SecurityDevices"),
+    ("Nurse Call Devices", "OST_NurseCallDevices"),
+]
+CONTENT_LABELS = [label for label, _ in CONTENT_CATEGORIES]
 SEARCH_COLUMN = "__search"
 
 try:
@@ -81,11 +95,23 @@ def filter_records(records, scope, level=None):
     return list(records)
 
 
+def count_field(category):
+    return COUNT_PREFIX + category
+
+
+def is_count_field(field):
+    return field.startswith(COUNT_PREFIX)
+
+
+def count_fields():
+    return [count_field(c) for c in CONTENT_LABELS]
+
+
 def missing_fields(records, fields):
     """Fields whose values have not been read from the model yet for these records."""
     missing = []
     for field in fields:
-        if field in PSEUDO_FIELDS:
+        if field in PSEUDO_FIELDS or is_count_field(field):
             continue
         for rec in records:
             if field not in rec["values"]:
@@ -101,6 +127,8 @@ def record_value(rec, field):
         return rec.get("category", u"")
     if field == "Level":
         return rec.get("level", u"")
+    if is_count_field(field):
+        return rec.get("counts", {}).get(field[len(COUNT_PREFIX):], 0)
     return rec["values"].get(field, u"")
 
 
@@ -160,6 +188,72 @@ def format_parameter_value(param, element_name_lookup=None):
     except Exception:
         pass
     return u""
+
+
+def normalize_content_categories(value):
+    """Known content categories from settings, in canonical order; all of them by default."""
+    if not isinstance(value, list):
+        return list(CONTENT_LABELS)
+    return [c for c in CONTENT_LABELS if c in value]
+
+
+def index_contents(items, key):
+    """Group content items by item[key] (a Space/Room id); None collects unassigned items."""
+    index = {}
+    for item in items:
+        index.setdefault(item.get(key), []).append(item)
+    return index
+
+
+def category_counts(items):
+    counts = {}
+    for item in items:
+        counts[item["category"]] = counts.get(item["category"], 0) + 1
+    return counts
+
+
+def item_label(item):
+    parts = []
+    if item.get("mark"):
+        parts.append(u"Mark {}".format(item["mark"]))
+    if item.get("level"):
+        parts.append(item["level"])
+    parts.append(u"Id {}".format(item["id"]))
+    return u" \u00b7 ".join(parts)
+
+
+def group_contents(items, categories=None):
+    """[(category, ids, [(family : type, ids, [(label, id)])])] in category order, then name order."""
+    order = categories if categories is not None else CONTENT_LABELS
+    by_cat = {}
+    for item in items:
+        if item["category"] in order:
+            by_cat.setdefault(item["category"], []).append(item)
+    result = []
+    for category in order:
+        cat_items = by_cat.get(category)
+        if not cat_items:
+            continue
+        by_type = {}
+        for item in cat_items:
+            name = u"{} : {}".format(item.get("family") or u"?", item.get("type") or u"?")
+            by_type.setdefault(name, []).append(item)
+        types = []
+        cat_ids = []
+        for name in sorted(by_type, key=lambda x: x.lower()):
+            members = sorted(by_type[name], key=lambda i: (to_text(i.get("mark")).lower(), i["id"]))
+            ids = [i["id"] for i in members]
+            cat_ids.extend(ids)
+            types.append((name, ids, [(item_label(i), i["id"]) for i in members]))
+        result.append((category, cat_ids, types))
+    return result
+
+
+def order_phase_ids(phase_ids, sequence):
+    """Phase ids latest-first by project phase sequence; unknown ids keep their order at the end."""
+    rank = dict((pid, i) for i, pid in enumerate(sequence))
+    known = sorted([p for p in phase_ids if p in rank], key=lambda p: -rank[p])
+    return known + [p for p in phase_ids if p not in rank]
 
 
 class ActionQueue(object):

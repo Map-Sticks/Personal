@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Modeless, searchable browser for Space and Room parameters.
+"""Modeless, searchable browser for Space and Room parameters and the elements inside them.
 
 Modeless rules (see docs/pyrevit-patterns.md):
   * __persistentengine__ keeps the engine alive so the window's handlers keep working.
@@ -8,7 +8,7 @@ Modeless rules (see docs/pyrevit-patterns.md):
   * The tool never modifies the model, so it never opens a transaction.
 """
 __title__ = "Parameter\nBrowser"
-__doc__ = "Modeless searchable parameter browser for Spaces and Rooms."
+__doc__ = "Modeless searchable parameter browser for Spaces and Rooms, listing the elements in each."
 __persistentengine__ = True
 
 import os
@@ -25,7 +25,8 @@ from System import Int32, Int64
 from System.Collections.Generic import List
 from System.Data import DataTable
 from System.Windows import Visibility
-from System.Windows.Controls import DataGridTextColumn, DataGridLength, DataGridRow, ItemsControl
+from System.Windows.Controls import (DataGridTextColumn, DataGridLength, DataGridRow, ItemsControl,
+                                     TreeViewItem)
 from System.Windows.Data import Binding
 
 from pyrevit import DB, UI, HOST_APP, forms, revit, script
@@ -145,10 +146,131 @@ def read_source(doc, category, view_id, wanted_fields):
         except Exception:
             category_name = u""
         rec = {"id": eid, "level": level_names[level_key], "visible": eid in visible,
-               "category": category_name, "values": {}}
+               "category": category_name, "label": spatial_label(e, eid), "values": {}, "counts": {}}
         read_values(doc, e, rec, fields)
         records.append(rec)
     return records, names
+
+
+def spatial_label(element, eid):
+    number = name = u""
+    try:
+        number = logic.to_text(element.Number)
+    except Exception:
+        pass
+    try:
+        name = logic.format_parameter_value(element.get_Parameter(DB.BuiltInParameter.ROOM_NAME))
+    except Exception:
+        pass
+    return u" ".join([x for x in (number, name) if x]) or u"Id {}".format(eid)
+
+
+def spatial_phases(doc, category):
+    """Phases that the project's Spaces/Rooms of this category are placed in, latest phase first."""
+    found = {}
+    for e in (DB.FilteredElementCollector(doc).OfCategory(category)
+              .WhereElementIsNotElementType().ToElements()):
+        phase_id = None
+        try:
+            param = e.get_Parameter(DB.BuiltInParameter.ROOM_PHASE)
+            if param is not None and param.HasValue:
+                phase_id = param.AsElementId()
+        except Exception:
+            phase_id = None
+        if phase_id is None or logic.element_id_value(phase_id) < 0:
+            phase_id = e.CreatedPhaseId
+        key = logic.element_id_value(phase_id)
+        if key >= 0 and key not in found:
+            found[key] = phase_id
+    sequence = [logic.element_id_value(p.Id) for p in doc.Phases]
+    phases = []
+    for key in logic.order_phase_ids(list(found.keys()), sequence):
+        phase = doc.GetElement(found[key])
+        if phase is not None:
+            phases.append(phase)
+    return phases
+
+
+class SpatialLookup(object):
+    """FamilyInstance -> Space/Room id using get_Space(phase)/get_Room(phase) with explicit phases.
+
+    The phase-less .Space/.Room properties are ambiguous in IronPython and only use the project's
+    last phase, so they are not used.
+    """
+
+    def __init__(self, method_name, phases):
+        self.method_name = method_name
+        self.property_name = method_name[len("get_"):]
+        self.phases = phases
+        self.found = 0
+        self.errors = 0
+        self.first_error = None
+
+    def lookup(self, element):
+        for phase in self.phases:
+            try:
+                target = getattr(element, self.method_name)(phase)
+            except Exception as ex:
+                try:
+                    target = getattr(element, self.property_name)[phase]
+                except Exception:
+                    self.errors += 1
+                    if self.first_error is None:
+                        self.first_error = logic.to_text(ex)
+                    continue
+            if target is not None:
+                self.found += 1
+                return logic.element_id_value(target.Id)
+        return None
+
+    def summary(self, noun):
+        if not self.phases:
+            return u"No {} found in this model.".format(noun)
+        text = u"{} matched in phase: {}".format(
+            noun.capitalize(), u", ".join([logic.to_text(p.Name) for p in self.phases]))
+        if self.errors:
+            text += u" ({} lookup error(s), first: {})".format(self.errors, self.first_error)
+        return text
+
+
+def read_contents(doc, space_lookup, room_lookup):
+    """Family instances of CONTENT_CATEGORIES with the Space/Room each one is in."""
+    items = []
+    level_names = {}
+    for label, bic_name in logic.CONTENT_CATEGORIES:
+        bic = getattr(DB.BuiltInCategory, bic_name, None)
+        if bic is None:
+            continue
+        try:
+            elements = (DB.FilteredElementCollector(doc).OfCategory(bic)
+                        .WhereElementIsNotElementType().ToElements())
+        except Exception:
+            continue
+        for e in elements:
+            if not isinstance(e, DB.FamilyInstance):
+                continue
+            level_key = logic.element_id_value(e.LevelId)
+            if level_key not in level_names:
+                level_names[level_key] = logic.to_text(element_name(doc, e.LevelId) or u"")
+            try:
+                family = logic.to_text(e.Symbol.FamilyName)
+            except Exception:
+                family = u""
+            try:
+                mark = logic.format_parameter_value(e.get_Parameter(DB.BuiltInParameter.ALL_MODEL_MARK))
+            except Exception:
+                mark = u""
+            items.append({
+                "id": logic.element_id_value(e.Id),
+                "category": label,
+                "family": family,
+                "type": logic.to_text(e.Name),
+                "mark": mark,
+                "level": level_names[level_key],
+                "space": space_lookup.lookup(e),
+                "room": room_lookup.lookup(e),
+            })
+    return items
 
 
 class BrowserEventHandler(UI.IExternalEventHandler):
@@ -182,7 +304,13 @@ class ParameterBrowser(forms.WPFWindow):
         self.param_names = {}
         self.pending_fields = set()
         self.table = None
-        source, scope, self.fields = logic.normalize_settings(load_settings())
+        self.contents = {}
+        self.contents_ids = []
+        self.phase_notes = {}
+        settings = load_settings()
+        source, scope, self.fields = logic.normalize_settings(settings)
+        self.content_categories = logic.normalize_content_categories(
+            settings.get("content_categories") if isinstance(settings, dict) else None)
 
         for name in logic.SOURCES:
             self.cmbSource.Items.Add(name)
@@ -215,7 +343,7 @@ class ParameterBrowser(forms.WPFWindow):
 
     def persist_settings(self):
         save_settings({"source": self.current_source(), "scope": self.current_scope(),
-                       "fields": list(self.fields)})
+                       "fields": list(self.fields), "content_categories": list(self.content_categories)})
 
     # --- ExternalEvent plumbing -------------------------------------------------------------
     def run_in_revit(self, label, action):
@@ -261,10 +389,20 @@ class ParameterBrowser(forms.WPFWindow):
     def capture_model(self, doc, uidoc):
         view = uidoc.ActiveView
         view_id = view.Id if view is not None else None
+        lookups = {
+            "Spaces": SpatialLookup("get_Space", spatial_phases(doc, SOURCE_CATEGORIES["Spaces"])),
+            "Rooms": SpatialLookup("get_Room", spatial_phases(doc, SOURCE_CATEGORIES["Rooms"])),
+        }
+        items = read_contents(doc, lookups["Spaces"], lookups["Rooms"])
+        self.phase_notes = dict((k, v.summary(k.lower())) for k, v in lookups.items())
         for source, category in SOURCE_CATEGORIES.items():
             records, names = read_source(doc, category, view_id, self.fields)
+            index = logic.index_contents(items, "space" if source == "Spaces" else "room")
+            for rec in records:
+                rec["counts"] = logic.category_counts(index.get(rec["id"], []))
             self.records[source] = records
-            self.param_names[source] = names
+            self.param_names[source] = sorted(names + logic.count_fields(), key=lambda x: x.lower())
+            self.contents[source] = index
         self.doc = doc
         self.doc_title = logic.to_text(doc.Title)
         self.view_name = logic.to_text(view.Name) if view is not None else u""
@@ -296,7 +434,7 @@ class ParameterBrowser(forms.WPFWindow):
             if element is not None:
                 ids.Add(element.Id)
         if ids.Count == 0:
-            raise UserError("The selected rows no longer exist in the model. Click Refresh Model.")
+            raise UserError("Those elements no longer exist in the model. Click Refresh Model.")
         uidoc.Selection.SetElementIds(ids)
         if show:
             try:
@@ -349,8 +487,12 @@ class ParameterBrowser(forms.WPFWindow):
         table = DataTable("Rows")
         table.Columns.Add(logic.ID_COLUMN)
         table.Columns.Add(logic.SEARCH_COLUMN)
-        for i in range(len(fields)):
-            table.Columns.Add("P{}".format(i))
+        for i, field in enumerate(fields):
+            if logic.is_count_field(field):
+                # Typed column so counts sort numerically.
+                table.Columns.Add("P{}".format(i), clr.GetClrType(Int32))
+            else:
+                table.Columns.Add("P{}".format(i))
         table.BeginLoadData()
         for rec in records:
             values = [logic.record_value(rec, f) for f in fields]
@@ -376,6 +518,7 @@ class ParameterBrowser(forms.WPFWindow):
         self.table = table
         self.grid.ItemsSource = table.DefaultView
         self.apply_search()
+        self.update_contents()
 
         scope = self.current_scope()
         if scope == "Current view":
@@ -412,7 +555,100 @@ class ParameterBrowser(forms.WPFWindow):
                              lambda uiapp: self.select_in_revit(uiapp, ids, show)):
             self.set_status("Sending {} element(s) to Revit...".format(len(ids)))
 
+    # --- Contents side panel (cached data only) ---------------------------------------------
+    def singular(self):
+        return "space" if self.current_source() == "Spaces" else "room"
+
+    def update_contents(self):
+        source = self.current_source()
+        index = self.contents.get(source, {})
+        noun = self.singular()
+        if self.chkUnassigned.IsChecked:
+            items = index.get(None, [])
+            header = u"Not in any {} - {} element(s)".format(noun, len(items))
+        else:
+            ids = self.selected_element_ids()
+            items = []
+            for eid in ids:
+                items.extend(index.get(eid, []))
+            if not ids:
+                header = u"Select a {} to list the elements in it.".format(noun)
+            elif len(ids) == 1:
+                rec = [r for r in self.records.get(source, []) if r["id"] == ids[0]]
+                header = u"{} - {} element(s)".format(rec[0]["label"] if rec else ids[0], len(items))
+            else:
+                header = u"{} {}s selected - {} element(s)".format(len(ids), noun, len(items))
+        groups = logic.group_contents(items, self.content_categories)
+        self.contents_ids = [i for _, ids_, _ in groups for i in ids_]
+        if len(self.contents_ids) != len(items):
+            header += u" ({} hidden by Categories)".format(len(items) - len(self.contents_ids))
+        note = self.phase_notes.get(source)
+        self.lblContents.Text = header + (u"\n" + note if note else u"")
+
+        self.treeContents.Items.Clear()
+        for category, cat_ids, types in groups:
+            cat_node = self.tree_node(u"{} ({})".format(category, len(cat_ids)), cat_ids)
+            cat_node.IsExpanded = True
+            for type_name, type_ids, instances in types:
+                type_node = self.tree_node(u"{} ({})".format(type_name, len(type_ids)), type_ids)
+                for label, iid in instances:
+                    type_node.Items.Add(self.tree_node(label, [iid]))
+                cat_node.Items.Add(type_node)
+            self.treeContents.Items.Add(cat_node)
+
+    @staticmethod
+    def tree_node(header, ids):
+        node = TreeViewItem()
+        node.Header = header
+        node.Tag = list(ids)
+        return node
+
+    def contents_selection(self):
+        """Ids of the highlighted tree node, or everything listed when nothing is highlighted."""
+        node = self.treeContents.SelectedItem
+        if node is not None and node.Tag:
+            return list(node.Tag)
+        return list(self.contents_ids)
+
+    def request_contents(self, show):
+        ids = self.contents_selection()
+        if not ids:
+            self.set_status("No elements listed.")
+            return
+        if self.run_in_revit("Show elements" if show else "Select elements",
+                             lambda uiapp: self.select_in_revit(uiapp, ids, show)):
+            self.set_status("Sending {} element(s) to Revit...".format(len(ids)))
+
     # --- WPF event handlers (names referenced from UI.xaml) ---------------------------------
+    @ui_handler
+    def grid_selection_changed(self, sender, args):
+        if not self.initialising and not self.chkUnassigned.IsChecked:
+            self.update_contents()
+
+    @ui_handler
+    def unassigned_toggled(self, sender, args):
+        if not self.initialising:
+            self.update_contents()
+
+    @ui_handler
+    def choose_categories(self, sender, args):
+        items = [forms.TemplateListItem(c, checked=(c in self.content_categories)) for c in logic.CONTENT_LABELS]
+        chosen = forms.SelectFromList.show(items, title="Categories listed in the panel", multiselect=True,
+                                           button_name="Apply")
+        if chosen is None:
+            return
+        self.content_categories = logic.normalize_content_categories([logic.to_text(c) for c in chosen])
+        self.persist_settings()
+        self.update_contents()
+
+    @ui_handler
+    def contents_select_clicked(self, sender, args):
+        self.request_contents(False)
+
+    @ui_handler
+    def contents_show_clicked(self, sender, args):
+        self.request_contents(True)
+
     @ui_handler
     def source_changed(self, sender, args):
         if self.initialising:

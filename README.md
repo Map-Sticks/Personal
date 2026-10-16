@@ -40,7 +40,10 @@ actual Revit validation is still required.
 
 `Parameter Browser` (Electrical panel) is a read-only, modeless window that lists Spaces or Rooms
 with chosen parameter columns. It filters by whole project, current view (as of the last refresh) or
-level, searches across the visible columns, and can select or show the highlighted rows in Revit. All
+level, searches across the visible columns, and can select or show the highlighted rows in Revit.
+A side panel lists the electrical/low-voltage family instances inside the selected Spaces or Rooms
+(grouped by category and family type, with a "not in any space" view), and optional `Count:` columns
+give per-category quantities per row, replacing separate per-category schedules. All
 Revit reads and selection changes run through ExternalEvent; the window itself only uses cached data.
 Settings are stored in `%APPDATA%/pyRevit/ParameterBrowser.settings.json`.
 
@@ -161,6 +164,7 @@ in a disposable Revit project.
 python -m unittest discover -s tests -p test_parameter_browser.py -v
 ```
 
-These tests cover settings, column resolution, scope and search filtering, value formatting, XAML
+These tests cover settings, column resolution, scope and search filtering, value formatting,
+element-in-space indexing, grouping and count columns, XAML
 handler wiring, and that selection and parameter reads only happen inside the ExternalEvent handler
 (with document and closed-window guards). Revit must still confirm the WPF window and API behaviour.
