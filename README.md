@@ -47,10 +47,28 @@ give per-category quantities per row, replacing separate per-category schedules.
 Revit reads and selection changes run through ExternalEvent; the window itself only uses cached data.
 Settings are stored in `%APPDATA%/pyRevit/ParameterBrowser.settings.json`.
 
+`Cable Tray Coordinator` (Electrical panel) is a modeless window that re-routes a straight
+cable tray past an obstacle in the ceiling void. Pick a method (Auto, rise over, drop under,
+offset left/right, 90/60/45/30 degree bends, manual offset such as "drop 300 mm", or saved user
+presets), pick the tray and the obstacle (host or linked), and review the live preview before Apply.
+**Detour** mode cuts the tray, moves the middle and re-joins it with fittings; **Bridge** mode fills
+a gap between two cut tray ends, straight or around the obstacle. Auto mode works out the smallest
+clear offset from the obstacle geometry. The rest of the run is not moved, parameters are copied,
+and everything happens in one undoable transaction. See
+[Cable Tray Coordinator context and Revit acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CableTrayCoordinator.pushbutton/CONTEXT.md);
+actual Revit validation is still required.
+
 ```text
 CustomPyRevit.extension/
 └── Custom Tools.tab/
     ├── Electrical.panel/
+    │   ├── CableTrayCoordinator.pushbutton/
+    │   │   ├── bundle.yaml
+    │   │   ├── CONTEXT.md
+    │   │   ├── lib/
+    │   │   │   └── cable_tray_logic.py
+    │   │   ├── script.py
+    │   │   └── ui.xaml
     │   ├── CircuitHub.pushbutton/
     │   │   ├── bundle.yaml
     │   │   ├── CONTEXT.md
@@ -168,3 +186,15 @@ These tests cover settings, column resolution, scope and search filtering, value
 element-in-space indexing, grouping and count columns, XAML
 handler wiring, and that selection and parameter reads only happen inside the ExternalEvent handler
 (with document and closed-window guards). Revit must still confirm the WPF window and API behaviour.
+
+## Check Cable Tray Coordinator
+
+```sh
+python -m unittest discover -s tests -p test_cable_tray_coordinator.py -v
+```
+
+These tests cover obstacle clipping and required offsets, auto direction choice, route and segment
+normal geometry for each bend angle, detour/bridge validation, presets and parameter parsing,
+preview primitives, XAML handler wiring, and `build_route` against fake Revit objects (far-end
+reconnection, fitting-failure rollback). Revit must still confirm fitting creation and picking; follow the
+[acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CableTrayCoordinator.pushbutton/CONTEXT.md#6-revit-acceptance-checks-disposable-project).
