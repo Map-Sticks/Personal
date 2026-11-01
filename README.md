@@ -54,7 +54,30 @@ presets), pick the tray and the obstacle (host or linked), and review the live p
 **Detour** mode cuts the tray, moves the middle and re-joins it with fittings; **Bridge** mode fills
 a gap between two cut tray ends, straight or around the obstacle. Auto mode works out the smallest
 clear offset from the obstacle geometry. The rest of the run is not moved, parameters are copied,
-and everything happens in one undoable transaction. See
+and everything happens in one undoable transaction. Bridges also support parallel/perpendicular
+horizontal trays at different elevations via obstacle-checked routes with 90-degree turns,
+30/45/60-degree slopes and 30/45/60-degree sideways steps (e.g. a 45-degree offset round a wall
+corner), pulling free tray ends back when the fittings need more room. Optional individual
+obstacle avoidance makes separate detours along a long segment, merging nearby obstacles when
+needed to prevent short connecting pieces. Minimum segment lengths are remembered in settings
+and user presets; the real fitting take-up is measured per tray type/size and added to them, and
+short bend legs are repaired in the preview or rejected if they cannot fit. When the standard
+elbows do not fit, the route is re-planned with shorter elbow legs and smaller bend radii (never
+below the remembered **Min. bend radius**) and those sizes are set on the placed elbows.
+Bend angles include 22.5 and 15 degrees; with **Allow shallower bends to keep the clearance**
+the tool uses a shallower bend when the chosen angle would push the route further from the
+obstacle than the clearance, and the summary reports the actual gap to the obstacle.
+A clash at a free tray end moves that end sideways/over/under (e.g. past a wall); a clash at a
+connected end re-routes the connected run (up to 7 straights). In Bridge mode, clicking along the
+side of the second tray (or a free end pointing at its side) tees into it instead of joining its end.
+**Regenerate options** re-reads the picks, tries every direction and bend angle with your clearance
+and minimum settings, test-builds the best routes (always undone) and lists the top 5 to pick from.
+Only if nothing fits your settings does it offer **RELAXED** options (shorter elbow legs, bend
+radius down to 150 mm, half the Min. straight; never less clearance). These name the limits they
+break, ask for confirmation before Apply and are never saved as your settings.
+**Revert last route** restores the original geometry/connections and retains the selections for
+another attempt; subsequent model edits disable it for safety. Before commit the new route is
+solid-intersected with the selected obstacles and rolled back on a real clash. See
 [Cable Tray Coordinator context and Revit acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CableTrayCoordinator.pushbutton/CONTEXT.md);
 actual Revit validation is still required.
 
