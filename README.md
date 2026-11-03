@@ -81,6 +81,15 @@ solid-intersected with the selected obstacles and rolled back on a real clash. S
 [Cable Tray Coordinator context and Revit acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CableTrayCoordinator.pushbutton/CONTEXT.md);
 actual Revit validation is still required.
 
+`Parameter Browser WebView` (Electrical panel, **pyRevit 7+**) is the same read-only browser rendered as
+HTML in pyRevit 7's WebView2 output window, following the pattern of the working WebView example: the
+command reads the model once and injects the data plus `app.js`/`app.css`; no custom window,
+persistent engine or ExternalEvent is involved. Search, sorting, source/scope/level, the column chooser
+(with order, drag-to-reorder and resizable columns), `Count:` columns, the "Elements in selection" tree,
+Copy and CSV export all run in the browser. **Select / Show** use pyRevit's `revit://outputhelpers`
+select links, and **Refresh model** re-runs the button. Settings live in the WebView2 profile's
+localStorage (seeded from the classic button's settings file).
+
 ```text
 CustomPyRevit.extension/
 └── Custom Tools.tab/
@@ -106,6 +115,15 @@ CustomPyRevit.extension/
     │   │   ├── README.txt
     │   │   ├── script.py
     │   │   └── UI.xaml
+    │   ├── ParameterBrowser WebView.pushbutton/
+    │   │   ├── app.css
+    │   │   ├── app.js
+    │   │   ├── bundle.yaml
+    │   │   ├── lib/
+    │   │   │   ├── parameter_browser_logic.py
+    │   │   │   └── parameter_browser_webview_data.py
+    │   │   ├── README.txt
+    │   │   └── script.py
     │   ├── Place Ceiling Devices.pushbutton/
     │   │   ├── CONTEXT.md
     │   │   ├── bundle.yaml
@@ -221,3 +239,14 @@ normal geometry for each bend angle, detour/bridge validation, presets and param
 preview primitives, XAML handler wiring, and `build_route` against fake Revit objects (far-end
 reconnection, fitting-failure rollback). Revit must still confirm fitting creation and picking; follow the
 [acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CableTrayCoordinator.pushbutton/CONTEXT.md#6-revit-acceptance-checks-disposable-project).
+
+## Check Parameter Browser WebView
+
+```sh
+python -m unittest discover -s tests -p test_parameter_browser_webview.py -v
+```
+
+These cover the WebView payload (exact string element ids, JSON safety), the script's model read and
+injection with mock Revit objects, and, when `node` is installed, `app.js` helpers checked against the
+Python logic (fields, scope, search, sorting, contents grouping, `revit://` links, CSV, settings).
+Revit must still confirm the output window, the select/show links and Refresh model.

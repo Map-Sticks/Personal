@@ -1,0 +1,6 @@
+title: Universal Scheduler
+tooltip: Build interactive cross-category schedules using instance, type, room and space data.
+author: Jacques-Michael
+min_revit_version: 2021
+engine:
+  clean: true

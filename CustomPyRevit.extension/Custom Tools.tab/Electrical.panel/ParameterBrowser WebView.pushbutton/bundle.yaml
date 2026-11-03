@@ -1,0 +1,5 @@
+title: Parameter Browser\nWebView
+tooltip: Searchable Space/Room parameter browser in the pyRevit 7 WebView2 output window. Lists the elements in each Space/Room; select or show rows in Revit. Read-only.
+author: Jacques-Michael Oosthuizen / Microsoft Copilot
+engine:
+  clean: true

@@ -44,6 +44,25 @@ A complete, working, commented implementation is in
 `CustomPyRevit.extension/Custom Tools.tab/Templates.panel/Modeless Window.pushbutton/`. **Copy that folder for
 every new modeless tool** and change only the XAML and the model-work methods.
 
+## HTML / WebView2 tools (pyRevit 7+)
+
+pyRevit 7's output window is WebView2 (Chromium). For an HTML tool, **use the output window; do not host your
+own `Microsoft.Web.WebView2` control in a WPF window** (assembly loading, user-data folder and async init make
+that fragile under IronPython). Reference: `ParameterBrowser WebView.pushbutton` and `WebviewExample/`.
+
+- Read the model in the command (valid API context), then `output = script.get_output()`,
+  `output.add_style(css)` and `output.inject_script(data_js + app_js, body=True)`. No persistent engine,
+  no ExternalEvent: no Python runs after the command ends.
+- Pass data with `inject_script` (`window.X = <json>;`, `ensure_ascii=True`, element ids as strings).
+  `print_html` rewrites `:name:` emoji codes and newlines, which corrupts data embedded in HTML.
+- JS -> Revit only through pyRevit's link handler (`ScriptConsoleUtils.ProcessUrl`):
+  `revit://outputhelpers?command=select&element[]=1,2,3&show=true|false` (ids may be comma-joined) and
+  `revit://outputhelpers?command=button&controlid=<EXEC_PARAMS.command_controlid>` to re-run a button
+  (call `output.close_others()` at the start so the re-run replaces the old window). Navigate with an
+  `<a href>` click or `location.href = url`. Selection acts on the *active* document.
+- `localStorage` persists (per Revit version WebView2 profile); there is no other way to save from JS.
+- Detect pyRevit 7: `pyrevit.VERSION_MAJOR >= 7`, or `output.renderer` raising `NotImplementedError`.
+
 ## Modal windows / simple UI
 
 Use pyRevit built-ins first, they need no XAML: `forms.alert`, `forms.ask_for_string`, `forms.SelectFromList.show`,
