@@ -1,0 +1,25 @@
+{
+	"mcpServers": {
+		"pyrevit-mcp": {
+			"type": "stdio",
+			"command": "uv",
+			"args": [
+				"run",
+				"--frozen",
+				"--directory",
+				"${REVITMCPPATH}",
+				"mcp",
+				"run",
+				"${REVITMCPPATH}\\main.py"
+			],
+			"tools": [
+				"*"
+			],
+			"env": {
+				"REVIT_PORT": "${REVITROUTESPORT}",
+				"REVITMCPPATH": "${env:USERPROFILE}\\mcp-server-for-revit-python",
+				"REVITROUTESPORT": "48884"
+			}
+		}
+	}
+}

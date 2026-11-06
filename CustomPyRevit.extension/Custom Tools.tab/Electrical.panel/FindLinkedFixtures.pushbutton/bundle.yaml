@@ -1,0 +1,9 @@
+title: Find Linked Fixtures
+tooltip: >-
+  Find point-based elements from any category in a linked model within a host
+  MEP Space, including Nurse Call Devices. Map them to loaded host family
+  categories and place compatible level-based or work-plane-based instances.
+  Save settings explicitly to the RVT, then save/sync the project.
+  JSON settings can be imported and exported.
+author: Custom
+context: doc-project

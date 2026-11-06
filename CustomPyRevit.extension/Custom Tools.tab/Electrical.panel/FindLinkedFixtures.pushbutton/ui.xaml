@@ -1,6 +1,6 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Find Linked Fixtures - Stage 2.3" Height="870" Width="1520"
+        Title="Find Linked Fixtures" Height="870" Width="1520"
         WindowStartupLocation="CenterScreen" ResizeMode="CanResize"
         ShowInTaskbar="False" Topmost="False">
   <Grid Margin="10">
@@ -10,15 +10,18 @@
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
-    <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,8">
+    <WrapPanel Grid.Row="0" Margin="0,0,0,8">
       <Button Name="btnReloadSpaces" Content="Reload Spaces" Width="120" Margin="0,0,8,0"/>
-      <Button Name="btnSaveSettings" Content="Save Settings" Width="110" Margin="0,0,8,0"/>
+      <Button Name="btnSaveSettings" Content="Save to RVT" Width="100" Margin="0,0,8,0"/>
+      <Button Name="btnReloadSettings" Content="Reload RVT" Width="90" Margin="0,0,8,0"/>
+      <Button Name="btnImportSettings" Content="Import Settings..." Width="115" Margin="0,0,8,0"/>
+      <Button Name="btnExportSettings" Content="Export Settings..." Width="115" Margin="0,0,8,0"/>
       <Button Name="btnResetSettings" Content="Reset Settings" Width="110" Margin="0,0,8,0"/>
       <Button Name="btnFilterFamilies" Content="Filter Families..." Width="120" Margin="0,0,8,0"/>
       <TextBlock Name="txtFamilyCount" VerticalAlignment="Center" Foreground="#666" Margin="0,0,16,0" Text=""/>
       <Button Name="btnClose" Content="Close" Width="80"/>
       <TextBlock Name="txtStatus" Margin="16,0,0,0" VerticalAlignment="Center" Foreground="#444" Text="Ready."/>
-    </DockPanel>
+    </WrapPanel>
 
     <Grid Grid.Row="1">
       <Grid.ColumnDefinitions>
@@ -35,7 +38,7 @@
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
           <CheckBox Name="cbActiveView" Grid.Row="0" Margin="0,0,0,8" Content="Active View Spaces Only" IsChecked="True"/>
-          <TextBox Name="tbSpaceSearch" Grid.Row="1" Margin="0,0,0,6" ToolTip="Filter spaces"/>
+          <TextBox Name="tbSpaceSearch" Grid.Row="1" Margin="0,0,0,6" ToolTip="Search Space number, name or level. Results show number - name [level] (ID)."/>
           <ListBox Name="lbSpaces" Grid.Row="2" SelectionMode="Single"/>
         </Grid>
       </GroupBox>
@@ -71,14 +74,16 @@
             <TextBlock Grid.Row="0" Grid.Column="0" Text="Linked Model:" VerticalAlignment="Center"/>
             <ComboBox Name="cmbLinkInstance" Grid.Row="0" Grid.Column="1" Margin="3"/>
             <TextBlock Grid.Row="0" Grid.Column="2" Text="Scan tol. mm:" VerticalAlignment="Center"/>
-            <TextBox Name="tbScanTolerance" Grid.Row="0" Grid.Column="3" Text="300" Margin="3"/>
+            <TextBox Name="tbScanTolerance" Grid.Row="0" Grid.Column="3" Text="300" Margin="3"
+                     ToolTip="Horizontal tolerance outside outer Space boundaries only. Never extends Space height or fills inner voids."/>
             <TextBlock Grid.Row="0" Grid.Column="4" Text="Wall search mm:" VerticalAlignment="Center"/>
             <TextBox Name="tbWallSearchDistance" Grid.Row="0" Grid.Column="5" Text="600" Margin="3"/>
 
             <TextBlock Grid.Row="1" Grid.Column="0" Text="Level filter:" VerticalAlignment="Center"/>
-            <ComboBox Name="cmbLevelMode" Grid.Row="1" Grid.Column="1" Margin="3">
-              <ComboBoxItem Content="Same Level Name" IsSelected="True"/>
-              <ComboBoxItem Content="Ignore Level"/>
+            <ComboBox Name="cmbLevelMode" Grid.Row="1" Grid.Column="1" Margin="3"
+                      ToolTip="Both modes enforce actual Space volume. Match compares transformed linked level elevations within 1 mm; volume only allows devices with no linked level or differently assigned levels.">
+              <ComboBoxItem Content="Match linked level elevation" IsSelected="True"/>
+              <ComboBoxItem Content="Space volume only"/>
             </ComboBox>
             <TextBlock Grid.Row="1" Grid.Column="2" Text="Default h. mm:" VerticalAlignment="Center"/>
             <TextBox Name="tbDefaultHeight" Grid.Row="1" Grid.Column="3" Text="300" Margin="3"/>
@@ -101,19 +106,16 @@
           </Grid>
         </GroupBox>
 
-        <GroupBox Grid.Row="1" Header="Categories" Margin="0,0,0,4">
-          <WrapPanel Margin="6">
-            <CheckBox Name="catElectricalFixtures" Content="Electrical Fixtures" Margin="4" IsChecked="True"/>
-            <CheckBox Name="catDataDevices" Content="Data Devices" Margin="4" IsChecked="True"/>
-            <CheckBox Name="catCommunicationDevices" Content="Comms Devices" Margin="4" IsChecked="True"/>
-            <CheckBox Name="catLightingFixtures" Content="Lighting Fixtures" Margin="4"/>
-            <CheckBox Name="catLightingDevices" Content="Lighting Devices" Margin="4"/>
-            <CheckBox Name="catFireAlarmDevices" Content="Fire Alarm" Margin="4"/>
-            <CheckBox Name="catSecurityDevices" Content="Security" Margin="4"/>
-            <CheckBox Name="catElectricalEquipment" Content="Elec Equipment" Margin="4"/>
-            <CheckBox Name="catGenericModel" Content="Generic Model" Margin="4"/>
-            <CheckBox Name="catSpecialityEquipment" Content="Speciality Equip" Margin="4"/>
-          </WrapPanel>
+        <GroupBox Grid.Row="1" Header="Categories (point-based placement only)" Margin="0,0,0,4">
+          <StackPanel Margin="6">
+            <StackPanel Orientation="Horizontal">
+              <Button Name="btnScanCategories" Content="Linked Scan Categories..." Margin="4" Padding="8,3"/>
+              <Button Name="btnTargetCategories" Content="Host Family Categories..." Margin="4" Padding="8,3"/>
+              <TextBlock Name="txtCategoryCount" Margin="8,4" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Text="Search any category in the selected link, including Nurse Call Devices. Only elements with a LocationPoint can be placed; host types must match the placement mode."
+                       TextWrapping="Wrap" Foreground="#666" Margin="4"/>
+          </StackPanel>
         </GroupBox>
 
         <GroupBox Grid.Row="2" Header="Mapping Rules (first match wins)" Margin="0,0,0,4">
@@ -163,12 +165,12 @@
           <Button Name="btnPlaceChecked" Content="Place Checked" Width="120" Margin="0,0,6,0"/>
           <Button Name="btnUndoLast" Content="Undo Last" Width="100" IsEnabled="False" Margin="0,0,6,0"/>
           <Button Name="btnSelectLast" Content="Select Last" Width="100" IsEnabled="False" Margin="0,0,10,0"/>
-          <TextBlock Text="Wall=boundary. Ceiling=linked XY. Ceiling(Face)=ref plane." VerticalAlignment="Center" Foreground="#666"/>
+          <TextBlock Text="Placement uses the Space level. Linked height is informational." VerticalAlignment="Center" Foreground="#666"/>
         </DockPanel>
       </Grid>
     </Grid>
 
-    <TextBlock Grid.Row="2" Foreground="#888" Margin="2,6,2,0" TextWrapping="Wrap" FontSize="11"
-               Text="Stage 2.3: Family filter dialog, tighter UI. Wall/Ceiling/Ceiling(Face) modes."/>
+    <TextBlock Name="txtSettingsInfo" Grid.Row="2" Foreground="#666" Margin="2,6,2,0" TextWrapping="Wrap" FontSize="11"
+               Text="Loading RVT settings. Save to RVT is explicit; then save/sync the Revit project. JSON is import/export only."/>
   </Grid>
 </Window>

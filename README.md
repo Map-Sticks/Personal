@@ -20,11 +20,51 @@ total sheet count. Placeholder sheets and sheets not shown in the sheet list
 are included; linked projects are not queried. It reports a clear message if
 there is no open project, the active document is a family, or there are no sheets.
 
+`Normalise Sheet Origins` (Getting Started panel) audits and aligns sheets to a reference sheet. Pick
+the reference; every sheet is audited and misaligned ones are listed with their offset. Align all,
+choose some, or audit only, and optionally save a CSV record. Each moved sheet's title block and all its content (viewports,
+schedules, text, lines, etc.) move by one shift so the title block's bottom-left corner matches the
+reference. Elements inside the title block family follow it automatically. Each sheet is checked
+after the move and rolled back if the corner did not land; the output window lists each sheet's offset
+and the action taken. See [docs/normalise-sheet-origins.md](docs/normalise-sheet-origins.md).
+
 `Place Ceiling Devices` (Electrical panel) is a **scaffold only**: it shows a "not implemented"
 alert. Requirements and lessons learned are in its `CONTEXT.md`.
 
 `Route Cable Along Tray` (Electrical panel) is also a **scaffold only**; it will route a circuit
 path along cable trays and report cable length. See its `CONTEXT.md`.
+
+`Find Linked Fixtures` (Electrical panel) scans point-based elements inside a selected host MEP
+Space. **Linked Scan Categories...** offers all top-level categories exposed by the selected
+linked document, including Nurse Call Devices; **Host Family Categories...** offers categories
+with loaded host family types. Both selectors are searchable and support multiple selections.
+Existing scan choices, mappings and rules are retained, and placement targets default to
+Electrical Fixtures. Wall/Ceiling modes require non-hosted, one-level-based families; Ceiling
+(Face) requires work-plane-based families and a horizontal host reference plane. This is not a
+general-purpose system-element copier or a true wall-hosting tool. Space search matches number,
+actual Space name and level; results include all three plus an ID. Scanning checks Space volume
+and inner voids; tolerance is horizontal and outside outer boundaries only. **Linked h. mm**
+shows two transformed heights above the selected Space's level: **Ins** (family insertion point)
+and **3D** (bottom / top of the visible geometry, which includes any offset built into the family,
+e.g. a device placed at 0 whose 3D is pushed up 700 mm by a family parameter). Both are
+independent of editable placement heights. Placement uses that Space level, not the active view's level. Legacy level-name
+filter settings migrate to transformed-level-elevation matching; **Space volume only** also
+supports devices without a usable linked level. Automatic updates and host-duplicate prevention
+remain deferred. **Save to RVT** writes settings into project Extensible Storage via an
+ExternalEvent transaction and verifies the stored payload; **save/sync the Revit project afterward**
+to persist them to disk/central. Scan, placement and close do not silently save settings.
+Closing with edits offers Save/Discard/Cancel. **Reload RVT** recovers from another window/user
+changing the stored settings; export your edits before reloading if needed.
+**Import Settings...** reads a previous JSON and confirms its mapping/rule counts;
+**Export Settings...** creates a separately chosen JSON backup. Import is a window draft until saved
+to RVT. Existing RVT settings always take precedence, even when empty. Without RVT settings, the
+old bundle JSON is offered as a read-only migration draft, never overwritten automatically.
+The footer identifies the source, counts mappings/rules and reports how many target IDs exist in
+this host project. IDs are still project-specific; imported missing targets require remapping.
+IDs travel as exact decimal strings for IronPython JSON compatibility; legacy numeric IDs also load.
+Review the
+[detailed assessment and Revit acceptance checks](docs/find-linked-fixtures-review.md)
+before production use.
 
 `CircuitHub` (Electrical panel) manages circuits and panels in a modeless window. Its **Panels** tab
 supports single-panel rename and bulk literal find/replace with prefixes/suffixes, a confirmation
