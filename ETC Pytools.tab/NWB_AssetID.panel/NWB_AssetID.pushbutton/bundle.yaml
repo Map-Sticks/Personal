@@ -1,8 +1,0 @@
-title: "NWB\nAsset ID"
-tooltip: >
-  Generate NWB_AssetID = AssetTypeCode-Building-Level-#### with a per
-  AssetTypeCode-Building-Level sequential counter. Type 1 & 2 assets get a
-  real ID; all others get N/A. Copy/paste duplicates are caught via invisible
-  Extensible Storage. Non-destructive by default.
-engine:
-  clean: false
