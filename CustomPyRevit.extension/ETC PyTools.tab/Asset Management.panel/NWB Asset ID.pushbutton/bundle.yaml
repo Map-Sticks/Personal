@@ -1,8 +1,6 @@
 title: "NWB\nAsset ID"
 tooltip: >
-  Generate NWB_AssetID = AssetTypeCode-Building-Level-#### with a per
-  AssetTypeCode-Building-Level sequential counter. Type 1 & 2 assets get a
-  real ID; all others get N/A. Copy/paste duplicates are caught via invisible
-  Extensible Storage. Non-destructive by default.
+  Generate NWB asset IDs and Space-based room IDs/names. Preview changes and
+  export a CSV before applying them.
 engine:
   clean: false

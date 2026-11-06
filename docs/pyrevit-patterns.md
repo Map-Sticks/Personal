@@ -78,8 +78,9 @@ Modal `window.show_dialog()` runs inside the API context, so API calls and trans
 
 ## Bundle layout and metadata
 
-- `Tab.tab/Panel.panel/Name.pushbutton/` with `script.py`, optional `bundle.yaml` (`title`, `tooltip`, `author`),
-  `icon.png` (96x96 recommended; `icon.dark.png` for dark theme), shared code in `lib/`.
+- `Tab.tab/Panel.panel/Name.pushbutton/` with `script.py`, `bundle.yaml` (`title`, `tooltip`, `author`),
+  and a unique, purpose-made `icon.png` (96x96 recommended; `icon.dark.png` for dark theme), shared code in `lib/`.
+  Do not reuse a generic icon from another button.
 - Reload pyRevit after any bundle/metadata change. Edits to a persistent-engine
   script need the old window closed first.
 - Useful module variables: `__title__`, `__doc__` (tooltip), `__author__`, `__persistentengine__`, `__min_revit_ver__`,

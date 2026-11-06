@@ -1,4 +1,4 @@
 title: Color Scheme Editor
-tooltip: Renumber viewports on the active sheet (or selected sheets) in reading order, with a configurable UI.
+tooltip: Recolor entries in one Color Fill Scheme and optionally remove entries that are not in use.
 author: JM Oosthuizen
 min_revit_version: 2022

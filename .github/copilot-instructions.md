@@ -20,8 +20,8 @@ Before writing or changing any button, read:
   `__persistentengine__ = True`, always do model work in an `IExternalEventHandler.Execute` via `ExternalEvent.Raise()`,
   create the event in `__init__`, never call the Revit API from click handlers directly.
 - Prefer pyRevit built-ins (`forms.alert`, `forms.SelectFromList`, ...) over custom XAML when they are enough.
-- New button = new `<Name>.pushbutton` folder with `script.py` + `bundle.yaml` (+ `window.xaml` if needed). Update the
-  README button list.
+- New button = new `<Name>.pushbutton` folder with `script.py`, `bundle.yaml`, and a unique purpose-made `icon.png`
+  (+ `window.xaml` if needed). Never reuse a generic icon from another button. Update the README button list.
 - Put pure logic in plain functions and add a mock-based unit test in `tests/` (run with
   `python -m unittest discover -s tests -v`). Run `python -m py_compile` on new scripts.
 - When finished, tell the user exactly how to test in Revit (reload pyRevit, click which button, expected result), and

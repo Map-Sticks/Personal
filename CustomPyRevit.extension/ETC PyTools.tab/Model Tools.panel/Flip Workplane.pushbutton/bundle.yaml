@@ -1,3 +1,3 @@
 title: Flip Workplane
-tooltip: Rotates the Section Box to match a selected element.
-author: My Custom Tools
+tooltip: Toggle Flip Work Plane on selected family instances that support it.
+author: JM Oosthuizen

@@ -130,6 +130,26 @@ Copy and CSV export all run in the browser. **Select / Show** use pyRevit's `rev
 select links, and **Refresh model** re-runs the button. Settings live in the WebView2 profile's
 localStorage (seeded from the classic button's settings file).
 
+## ETC PyTools toolbar
+
+The imported work-computer buttons are organized under
+`CustomPyRevit.extension/ETC PyTools.tab`:
+
+- **Electrical:** Manual Wall Placement; Place Fixtures.
+- **Family Tools:** Family Offset Setup; Switch Colour Setup; Middle Family Parameter Setup.
+- **Model Tools:** Align Section Box; Color Scheme Editor; Flip Workplane; Focus Select.
+- **Revisions:** Custom Revision Setup; Apply Revisions; Remove Revisions.
+- **Spaces:** Align Elevation Rows; Space Plans Stage 3.
+- **Views and Sheets:** Legend Builder; Number Viewports.
+- **Asset Management:** NWB Asset ID (asset IDs plus Space-based room IDs/names).
+
+The uploaded Cable Tray Coordinator, Find Linked Fixtures, Circuiting/Circuit Hub, Normalise Sheet
+Origins, and Parameter Browser scripts match buttons already in **Custom Tools**, so those copies were
+not duplicated. The older Space Plans v1 and single-purpose NWB Asset ID variants were excluded in
+favor of the explicitly later Stage 3.6 and expanded NWB versions. The redundant selection-only Legend
+Builder was also omitted. The three archived Place Fixtures ZIP backups were removed; the current
+bundle is kept.
+
 ```text
 CustomPyRevit.extension/
 └── Custom Tools.tab/
@@ -181,6 +201,36 @@ CustomPyRevit.extension/
             └── script.py
 ```
 
+```text
+CustomPyRevit.extension/
+└── ETC PyTools.tab/
+    ├── Asset Management.panel/
+    │   └── NWB Asset ID.pushbutton/
+    ├── Electrical.panel/
+    │   ├── Manual Wall Placement.pushbutton/
+    │   ├── Place Fixtures.pushbutton/
+    │   └── FixtureTools.lib/
+    ├── Family Tools.panel/
+    │   ├── Family Offset Setup.pushbutton/
+    │   ├── Middle Family Parameters.pushbutton/
+    │   └── Switch Colour Setup.pushbutton/
+    ├── Model Tools.panel/
+    │   ├── Align Section Box.pushbutton/
+    │   ├── Color Scheme Editor.pushbutton/
+    │   ├── Flip Workplane.pushbutton/
+    │   └── Focus Select.pushbutton/
+    ├── Revisions.panel/
+    │   ├── Apply Revisions.pushbutton/
+    │   ├── Custom Revision Setup.pushbutton/
+    │   └── Remove Revisions.pushbutton/
+    ├── Spaces.panel/
+    │   ├── Align Elevation Rows.pushbutton/
+    │   └── Space Plans Stage 3.pushbutton/
+    └── Views and Sheets.panel/
+        ├── Legend Builder.pushbutton/
+        └── Number Viewports.pushbutton/
+```
+
 ## AI-assisted development kit
 
 - `.github/copilot-instructions.md` - rules every AI assistant should follow in this repo.
@@ -199,8 +249,9 @@ CustomPyRevit.extension/
 2. In Revit, open pyRevit Settings and add this repository's root directory to
    **Custom Extension Directories**. That directory contains
    `CustomPyRevit.extension`.
-3. Reload pyRevit from its ribbon tab. The **Custom Tools** tab and
-   **Getting Started** panel should appear.
+3. Reload pyRevit from its ribbon tab. The **Custom Tools** and **ETC PyTools**
+   tabs should appear. Existing starter buttons remain under **Custom Tools**;
+   the imported buttons are grouped in the panels listed above.
 4. After editing a script or its bundle metadata, reload pyRevit to see the
    changes. Test model-changing tools in a disposable project first.
 
@@ -209,11 +260,11 @@ CustomPyRevit.extension/
 1. Create a folder ending in `.pushbutton` inside an existing `.panel` folder.
    The folder name becomes the command name unless `bundle.yaml` provides a
    title.
-2. Add `script.py` as the command entry point. Add `bundle.yaml` when you want
-   to set metadata such as the button title or tooltip.
-3. Add optional assets such as `icon.png` in the button folder. Shared Python
-   modules can live in a `lib/` folder at the button, panel, tab, or extension
-   level.
+2. Add `script.py` as the command entry point and `bundle.yaml` with the
+   button title and tooltip.
+3. Add a unique, purpose-made `icon.png` for every button (96x96 recommended);
+   do not reuse a generic icon from another bundle. Shared Python modules can
+   live in a `lib/` folder at the button, panel, tab, or extension level.
 4. Reload pyRevit and test the button in Revit.
 
 The same folder-suffix convention applies when adding tabs (`.tab`) and panels
