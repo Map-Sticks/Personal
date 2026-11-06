@@ -1,0 +1,5 @@
+title: Space Plans Stage 3.6
+author: Jacques-Michael Oosthuizen
+tooltip: Select Floor Plan, RCP and Wall Elevation outputs independently, with optional sheet creation and batched sheet packing.
+min_revit_version: 2023
+max_revit_version: 2027

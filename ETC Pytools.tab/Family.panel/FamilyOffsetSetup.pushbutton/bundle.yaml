@@ -1,0 +1,6 @@
+title: "Offset\nSetup"
+tooltip: >-
+  Family Editor only. Wall mode: Left/Right + Wall Offset.
+  Ceiling mode: Left/Right + Up/Down in plan. Creates reference planes,
+  parameters, formulas, dimensions and labels. Pre-select the symbol to
+  place planes through its centre, then just lock the symbol to the planes.

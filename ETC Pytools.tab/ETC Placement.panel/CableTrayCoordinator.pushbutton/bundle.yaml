@@ -1,0 +1,5 @@
+title: Cable Tray\nCoordinator
+tooltip: Re-route trays around grouped or individual obstacles, bridge parallel/perpendicular ends at different elevations, preview minimum-length-safe routes, and revert the last route without repicking. One Undo per change.
+author: Map-Sticks / GitHub Copilot
+engine:
+  persistent: true

@@ -1,0 +1,5 @@
+title: Align Elevation Rows
+author: Jacques-Michael Oosthuizen
+tooltip: Align every existing elevation row independently without rebuilding row membership.
+min_revit_version: 2023
+max_revit_version: 2027

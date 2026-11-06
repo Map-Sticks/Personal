@@ -1,0 +1,17 @@
+title: Legend Builder
+
+tooltip: >-
+  Pick annotation and detail item family types and place them, with labels,
+  into a Drafting view. Filter categories, adjust spacing, and preview/adjust
+  before keeping. Note: Revit's API cannot place components in a true Legend
+  view, so a Drafting view is used.
+
+author: Jacques-Michael Oosthuizen
+
+highlight: new
+
+# Force the button to ALWAYS be enabled (never greyed out), even when no
+# document is open. The script itself checks that a project is open.
+context: zero-doc
+
+min_revit_version: 2017

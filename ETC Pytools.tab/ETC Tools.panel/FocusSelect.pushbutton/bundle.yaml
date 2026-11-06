@@ -1,0 +1,9 @@
+title: "Focus\nSelect"
+author: J-M Oosthuizen
+tooltip: >-
+  Select only elements of the chosen categories on busy plans.
+
+  Preselect elements (any number of categories) or pick an example element.
+  Then click/drag and press FINISH to add a round (shown orange).
+  A round containing only orange elements removes them.
+  FINISH with nothing picked, or Esc, ends the tool and keeps the selection.
