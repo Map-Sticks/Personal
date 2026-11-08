@@ -20,6 +20,18 @@
 				"REVITMCPPATH": "${env:USERPROFILE}\\mcp-server-for-revit-python",
 				"REVITROUTESPORT": "48884"
 			}
+		},
+		"fusion360-mcp-server": {
+			"type": "stdio",
+			"command": "uvx",
+			"args": [
+				"fusion360-mcp-server",
+				"--mode",
+				"socket"
+			],
+			"tools": [
+				"*"
+			]
 		}
 	}
 }

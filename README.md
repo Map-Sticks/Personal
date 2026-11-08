@@ -78,6 +78,37 @@ Virtual panels, panel creation, and level editing remain future work. See
 [CircuitHub context and Revit acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CircuitHub.pushbutton/CONTEXT.md);
 actual Revit validation is still required.
 
+`Draw Switchlines` (Electrical panel) is a drafting aid that works only in the active plan or RCP.
+A run is a session of one or more switch groups. For each group, select its switches and sensors
+(Lighting Devices) and the light fittings (Lighting Fixtures) they switch. You can preselect the first
+group or pick it after starting the tool. A group starts as "all fittings together". In the window you
+can change it to every second fitting on two outputs, A and B. Each group can be one switch to one
+light, a 2-way pair, a sensor plus a switch, or a corridor row. Add a dual-output sensor to two groups
+to switch two sets of fittings. The tool plans all groups together and draws orthogonal
+`!ETC_Switch line` detail lines that:
+
+- stop short of fittings and route around fittings that belong to other groups;
+- leave wall switches from their front face, one lane per switch, with each bank's lanes ordered to
+  avoid crossings;
+- skip lanes already used by existing switchlines;
+- tee a 2-way switch into the first switch's route instead of drawing a second parallel run;
+- connect ceiling sensors such as a dual-output motion sensor to both outputs;
+- place `Joint Symbol` annotations at tees;
+- draw a hop at every crossing, merging crossings that are close together into one hop and shrinking
+  a hop where a line is too short for a full one.
+
+The whole session is previewed in the view, with each group in its own colour, alongside one small
+Draw Switchlines window. The window lists the groups with matching colour swatches. Changing a group's
+switching mode or layout, flipping it or removing it updates the preview straight away.
+`+ Add group...` and `Re-pick...` hide the window while you pick in the view. Tick
+`Detail group per switch group` if you want groups; the tick is remembered. `Draw` commits; `Cancel`,
+Esc or closing the window leaves the model unchanged.
+
+Preview colours are removed on accept. Sizes are paper millimetres scaled by the view scale
+(3 mm fitting gap = 150 mm at 1:50). Logic tests:
+`python -m unittest discover -s tests -p test_draw_switchlines.py -v`. Revit validation of each
+drafting case is ongoing.
+
 `Parameter Browser` (Electrical panel) is a read-only, modeless window that lists Spaces or Rooms
 with chosen parameter columns. It filters by whole project, current view (as of the last refresh) or
 level, searches across the visible columns, and can select or show the highlighted rows in Revit.
@@ -168,6 +199,13 @@ CustomPyRevit.extension/
     │   │   │   └── circuit_hub_logic.py
     │   │   ├── script.py
     │   │   └── ui.xaml
+    │   ├── Draw Switchlines.pushbutton/
+    │   │   ├── bundle.yaml
+    │   │   ├── icon.png
+    │   │   ├── lib/
+    │   │   │   └── switchline_logic.py
+    │   │   ├── script.py
+    │   │   └── window.xaml
     │   ├── ParameterBrowser.pushbutton/
     │   │   ├── bundle.yaml
     │   │   ├── lib/

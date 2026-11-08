@@ -1,0 +1,8 @@
+title: Draw\nSwitchlines
+tooltip: >-
+  Draw switchlines (detail lines in the !ETC_Switch line style) in the active view only.
+  Select the switches/sensors (Lighting Devices) and the light fittings (Lighting Fixtures)
+  they switch, choose all together or every second fitting (outputs A/B), preview, then
+  accept, adjust or cancel. Adds joint symbols at tees and hops at crossings. Grouping is optional.
+author: Jacques-Michael
+context: doc-project

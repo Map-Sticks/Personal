@@ -1,0 +1,70 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Draw Switchlines" Width="460" SizeToContent="Height" MinHeight="420"
+        WindowStartupLocation="Manual" ResizeMode="CanMinimize" ShowInTaskbar="False">
+  <Grid Margin="10">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <TextBlock Name="txtView" Grid.Row="0" FontWeight="Bold" Margin="0,0,0,4" TextTrimming="CharacterEllipsis"/>
+    <TextBlock Grid.Row="1" Foreground="#555" TextWrapping="Wrap" Margin="0,0,0,8"
+               Text="One switch group = the switch(es)/sensor(s) and the fittings they switch. Each group previews in its own colour; changes update the preview straight away."/>
+
+    <GroupBox Grid.Row="2" Header="Switch groups">
+      <DockPanel Margin="4">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,6,0,0">
+          <Button Name="btnAdd" Content="+ Add group..." Width="110" Margin="0,0,6,0"
+                  ToolTip="Pick another switch/sensor and the fittings it switches"/>
+          <Button Name="btnRepick" Content="Re-pick..." Width="80" Margin="0,0,6,0"
+                  ToolTip="Pick the selected group's switches and fittings again"/>
+          <Button Name="btnRemove" Content="Remove" Width="80"/>
+        </StackPanel>
+        <ListBox Name="lbGroups" Height="150" SelectionMode="Single"/>
+      </DockPanel>
+    </GroupBox>
+
+    <GroupBox Grid.Row="3" Header="Selected group" Margin="0,6,0,0">
+      <Grid Margin="4">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="80"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock Grid.Row="0" Text="Switching" VerticalAlignment="Center"/>
+        <ComboBox Name="cbMode" Grid.Row="0" Grid.Column="1" Margin="0,2">
+          <ComboBoxItem Content="All fittings together"/>
+          <ComboBoxItem Content="Every second fitting (outputs A / B)"/>
+        </ComboBox>
+        <TextBlock Grid.Row="1" Text="Layout" VerticalAlignment="Center"/>
+        <ComboBox Name="cbStyle" Grid.Row="1" Grid.Column="1" Margin="0,2">
+          <ComboBoxItem Content="Chain fitting to fitting"/>
+          <ComboBoxItem Content="Trunk beside the row"/>
+        </ComboBox>
+        <Button Name="btnFlip" Grid.Row="2" Grid.Column="1" Margin="0,4,0,0" HorizontalAlignment="Left"
+                Width="200" Content="Flip corners / trunk side"/>
+      </Grid>
+    </GroupBox>
+
+    <Border Grid.Row="4" Margin="0,8,0,0" Padding="6" Background="#F4F4F4" BorderBrush="#DDD" BorderThickness="1">
+      <TextBlock Name="txtSummary" TextWrapping="Wrap" Foreground="#333"/>
+    </Border>
+
+    <DockPanel Grid.Row="5" Margin="0,10,0,0" LastChildFill="False">
+      <CheckBox Name="chkDetailGroups" DockPanel.Dock="Left" VerticalAlignment="Center"
+                Content="Detail group per switch group"/>
+      <Button Name="btnCancel" DockPanel.Dock="Right" Content="Cancel" Width="70" IsCancel="True"/>
+      <Button Name="btnAccept" DockPanel.Dock="Right" Content="Draw" Width="80" Margin="0,0,6,0"
+              FontWeight="Bold"/>
+    </DockPanel>
+  </Grid>
+</Window>
