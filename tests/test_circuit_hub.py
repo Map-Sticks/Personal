@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 
 
 BUNDLE = (Path(__file__).resolve().parents[1] / "CustomPyRevit.extension"
-          / "Custom Tools.tab" / "Electrical.panel" / "CircuitHub.pushbutton")
+          / "ETC PyTools.tab" / "Electrical.panel" / "CircuitHub.pushbutton")
 LIB = BUNDLE / "lib"
 
 spec = importlib.util.spec_from_file_location("circuit_hub_logic", LIB / "circuit_hub_logic.py")
@@ -195,6 +195,8 @@ class CircuitHubTests(unittest.TestCase):
         self.mod = importlib.util.module_from_spec(spec)
         with patch.dict(sys.modules, modules), patch.dict(os.environ, {"APPDATA": self.temp.name}):
             spec.loader.exec_module(self.mod)
+        self.mod.__file__ = str(Path(self.temp.name) / "CustomPyRevit.extension" / "ETC PyTools.tab"
+                                / "Electrical.panel" / "CircuitHub.pushbutton" / "script.py")
         self.mod.CACHE.panels = self.panels
         self.mod.CACHE.dirty = False
         self.window = self.mod.CircuitHub.__new__(self.mod.CircuitHub)
@@ -210,6 +212,157 @@ class CircuitHubTests(unittest.TestCase):
         self.mod.show_warning = Mock()
         self.mod.show_error = Mock()
         self.db = db
+
+    def test_bundle_fallback_preserves_previous_settings_after_move(self):
+        extension = Path(self.temp.name) / "CustomPyRevit.extension"
+        previous = (extension / "Custom Tools.tab" / "Electrical.panel"
+                    / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        current = (extension / "ETC PyTools.tab" / "Electrical.panel"
+                   / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        previous.parent.mkdir(parents=True)
+        current.parent.mkdir(parents=True)
+        previous.write_text('{"level_filter":"Level 2"}')
+        with patch.object(self.mod, "__file__", str(current.parent / "script.py")), \
+                patch.dict(os.environ, {"APPDATA": str(extension / "unavailable")}), \
+                patch.object(os, "makedirs", side_effect=OSError("unavailable")):
+            settings_path = self.mod.settings_file_path()
+        self.assertEqual(str(current), settings_path)
+        self.logger.warning.assert_called()
+        self.mod.SETTINGS_FILE = settings_path
+        with patch.object(self.mod, "__file__", str(current.parent / "script.py")):
+            self.assertEqual("Level 2", self.mod.load_settings()["level_filter"])
+            self.assertTrue(self.mod.save_settings({"show_empty_panels": True}))
+        self.assertEqual('{"level_filter":"Level 2"}', previous.read_text())
+        self.assertIn('"show_empty_panels": true', current.read_text())
+
+    def test_previous_bundle_settings_are_saved_to_available_appdata(self):
+        extension = Path(self.temp.name) / "CustomPyRevit.extension"
+        previous = (extension / "Custom Tools.tab" / "Electrical.panel"
+                    / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        current = (extension / "ETC PyTools.tab" / "Electrical.panel"
+                   / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        previous.parent.mkdir(parents=True)
+        current.parent.mkdir(parents=True)
+        previous.write_text('{"level_filter":"Previous"}')
+        primary = Path(self.mod.SETTINGS_FILE)
+        with patch.object(self.mod, "__file__", str(current.parent / "script.py")):
+            self.assertEqual("Previous", self.mod.load_settings()["level_filter"])
+            self.assertFalse(primary.exists())
+            self.assertTrue(self.mod.save_settings({"show_empty_panels": True}))
+        self.assertIn('"level_filter": "Previous"', primary.read_text())
+        self.assertEqual('{"level_filter":"Previous"}', previous.read_text())
+
+    def test_invalid_previous_bundle_settings_are_reported_and_not_overwritten(self):
+        extension = Path(self.temp.name) / "CustomPyRevit.extension"
+        previous = (extension / "Custom Tools.tab" / "Electrical.panel"
+                    / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        current = (extension / "ETC PyTools.tab" / "Electrical.panel"
+                   / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        previous.parent.mkdir(parents=True)
+        current.parent.mkdir(parents=True)
+        previous.write_text('{"level_filter":')
+        primary = Path(self.mod.SETTINGS_FILE)
+        with patch.object(self.mod, "__file__", str(current.parent / "script.py")):
+            with self.assertRaises(ValueError):
+                self.mod.load_settings()
+            with patch("builtins.print"):
+                self.assertFalse(self.mod.save_settings({"show_empty_panels": True}))
+        self.logger.error.assert_called()
+        self.assertFalse(primary.exists())
+        self.assertEqual('{"level_filter":', previous.read_text())
+
+    def test_existing_appdata_settings_win_over_bundle_files(self):
+        extension = Path(self.temp.name) / "CustomPyRevit.extension"
+        previous = (extension / "Custom Tools.tab" / "Electrical.panel"
+                    / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        current = (extension / "ETC PyTools.tab" / "Electrical.panel"
+                   / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        previous.parent.mkdir(parents=True)
+        current.parent.mkdir(parents=True)
+        previous.write_text('{"level_filter":"Previous"}')
+        current.write_text('{"level_filter":"Current"}')
+        primary = Path(self.mod.SETTINGS_FILE)
+        primary.write_text('{"level_filter":"AppData"}')
+        with patch.object(self.mod, "__file__", str(current.parent / "script.py")):
+            self.assertEqual("AppData", self.mod.load_settings()["level_filter"])
+        self.assertEqual('{"level_filter":"Previous"}', previous.read_text())
+        self.assertEqual('{"level_filter":"Current"}', current.read_text())
+
+    def test_invalid_appdata_settings_do_not_silently_fall_back(self):
+        primary = Path(self.mod.SETTINGS_FILE)
+        primary.write_text("[]")
+        with self.assertRaisesRegex(ValueError, "JSON object"):
+            self.mod.load_settings()
+        self.logger.error.assert_called()
+        self.assertEqual("[]", primary.read_text())
+
+    def test_selected_settings_removed_before_read_are_reported(self):
+        missing = str(Path(self.temp.name) / "removed.json")
+        with patch.object(self.mod, "settings_read_path", return_value=missing):
+            with self.assertRaises(IOError):
+                self.mod.load_settings()
+        self.logger.error.assert_called()
+
+    def test_current_bundle_settings_migrate_to_appdata_before_previous_settings(self):
+        extension = Path(self.temp.name) / "CustomPyRevit.extension"
+        previous = (extension / "Custom Tools.tab" / "Electrical.panel"
+                    / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        current = (extension / "ETC PyTools.tab" / "Electrical.panel"
+                   / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        previous.parent.mkdir(parents=True)
+        current.parent.mkdir(parents=True)
+        previous.write_text('{"level_filter":"Previous"}')
+        current.write_text('{"level_filter":"Current"}')
+        primary = Path(self.mod.SETTINGS_FILE)
+        with patch.object(self.mod, "__file__", str(current.parent / "script.py")):
+            self.assertEqual("Current", self.mod.load_settings()["level_filter"])
+            self.assertTrue(self.mod.save_settings({"show_empty_panels": True}))
+        self.assertIn('"level_filter": "Current"', primary.read_text())
+        self.assertEqual('{"level_filter":"Current"}', current.read_text())
+        self.assertEqual('{"level_filter":"Previous"}', previous.read_text())
+
+    def test_settings_save_failure_is_shown_in_window_log(self):
+        self.window.level_filter = "<All Levels>"
+        self.window.family_filter = logic.ALL_FAMILIES
+        self.window.type_filter = logic.ALL_TYPES
+        self.window.category_filter_enabled = True
+        self.window.allowed_categories = []
+        self.window.show_empty_panels = False
+        self.window.auto_refresh_enabled = False
+        with patch.object(self.mod, "save_settings", return_value=False):
+            self.assertFalse(self.window.save_current_settings())
+        self.window.log.assert_called_once()
+        self.assertIn("could not be saved", self.window.log.call_args.args[0])
+
+    def test_bundle_fallback_prefers_existing_current_settings(self):
+        extension = Path(self.temp.name) / "CustomPyRevit.extension"
+        previous = (extension / "Custom Tools.tab" / "Electrical.panel"
+                    / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        current = (extension / "ETC PyTools.tab" / "Electrical.panel"
+                   / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        previous.parent.mkdir(parents=True)
+        current.parent.mkdir(parents=True)
+        previous.write_text('{"level_filter":"Previous"}')
+        current.write_text('{"level_filter":"Current"}')
+        with patch.object(self.mod, "__file__", str(current.parent / "script.py")), \
+                patch.dict(os.environ, {"APPDATA": str(extension / "unavailable")}), \
+                patch.object(os, "makedirs", side_effect=OSError("unavailable")):
+            settings_path = self.mod.settings_file_path()
+        self.assertEqual(str(current), settings_path)
+        self.mod.SETTINGS_FILE = settings_path
+        self.assertEqual("Current", self.mod.load_settings()["level_filter"])
+        self.assertEqual('{"level_filter":"Previous"}', previous.read_text())
+
+    def test_bundle_fallback_uses_new_path_when_no_previous_settings_exist(self):
+        current = (Path(self.temp.name) / "CustomPyRevit.extension" / "ETC PyTools.tab"
+                   / "Electrical.panel" / "CircuitHub.pushbutton" / "circuit_hub_settings.json")
+        current.parent.mkdir(parents=True)
+        with patch.object(self.mod, "__file__", str(current.parent / "script.py")), \
+                patch.dict(os.environ, {"APPDATA": str(Path(self.temp.name) / "unavailable")}), \
+                patch.object(os, "makedirs", side_effect=OSError("unavailable")):
+            settings_path = self.mod.settings_file_path()
+        self.assertEqual(str(current), settings_path)
+        self.logger.warning.assert_called()
 
     def test_panel_labels_use_parameter_not_family_name(self):
         self.assertEqual("A", self.mod.get_panel_name(self.panels[1]))

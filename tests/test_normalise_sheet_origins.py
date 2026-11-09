@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 BUTTON_DIR = (
     Path(__file__).resolve().parents[1]
-    / "CustomPyRevit.extension" / "Custom Tools.tab" / "Getting Started.panel"
+    / "CustomPyRevit.extension" / "ETC PyTools.tab" / "Views and Sheets.panel"
     / "Normalise Sheet Origins.pushbutton"
 )
 spec = importlib.util.spec_from_file_location(

@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 
 
 BUNDLE = (Path(__file__).resolve().parents[1] / "CustomPyRevit.extension"
-          / "Custom Tools.tab" / "Electrical.panel" / "FindLinkedFixtures.pushbutton")
+          / "ETC PyTools.tab" / "Electrical.panel" / "FindLinkedFixtures.pushbutton")
 SOURCE = (BUNDLE / "script.py").read_text()
 
 
@@ -84,6 +84,7 @@ def load_button():
     bic = NS(**{"OST_" + name: -(i + 1) for i, name in enumerate(category_names)})
     env = dict(
         math=math, _re=re, json=json, io=io, shutil=shutil, os=os,
+        __file__=str(BUNDLE / "script.py"),
         BuiltInCategory=bic,
         forms=NS(WPFWindow=object, alert=Mock(), SelectFromList=NS(show=Mock()),
                  TemplateListItem=lambda item, checked: NS(item=item, checked=checked)),
@@ -239,6 +240,11 @@ class StorageAPI:
 class ButtonTests(unittest.TestCase):
     def setUp(self):
         self.env = load_button()
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.env["__file__"] = str(Path(self.temp.name) / "CustomPyRevit.extension"
+                                   / "ETC PyTools.tab" / "Electrical.panel"
+                                   / "FindLinkedFixtures.pushbutton" / "script.py")
         self.Win = self.env["Win"]
         self.win = self.Win.__new__(self.Win)
         self.win.txtStatus = NS(Text="")
@@ -1123,6 +1129,133 @@ class ButtonTests(unittest.TestCase):
         self.win.spRules = NS(Children=Items())
         self.win._apply_s = Mock()
         self.win._init_load = Mock()
+
+    def moved_settings_paths(self, directory):
+        extension = Path(directory) / "CustomPyRevit.extension"
+        previous = (extension / "Custom Tools.tab" / "Electrical.panel"
+                    / "FindLinkedFixtures.pushbutton" / "find_linked_fixtures_settings.json")
+        current = (extension / "ETC PyTools.tab" / "Electrical.panel"
+                   / "FindLinkedFixtures.pushbutton" / "find_linked_fixtures_settings.json")
+        previous.parent.mkdir(parents=True)
+        current.parent.mkdir(parents=True)
+        return previous, current
+
+    def test_moved_button_loads_previous_bundle_settings_as_an_unsaved_draft(self):
+        api = self.prepare_model_settings()
+        self.prepare_startup()
+        with tempfile.TemporaryDirectory() as directory:
+            previous, current = self.moved_settings_paths(directory)
+            original = '{"maps":{"Previous":22},"rules":[{"kw":"nurse","target":22}]}'
+            previous.write_text(original)
+            with patch.dict(self.env, __file__=str(current.parent / "script.py"),
+                            SETTINGS_FILE=str(current)):
+                self.win._startup_load()
+            self.assertEqual({"Previous": 22}, self.win.S["maps"])
+            self.assertIn(str(previous), self.win._settings_source)
+            self.assertIn("Legacy JSON draft", self.win._settings_source)
+            self.assertIsNone(self.win._saved_settings)
+            self.assertEqual([], api.transactions)
+            self.assertEqual(original, previous.read_text())
+            self.assertFalse(current.exists())
+
+    def test_identical_previous_and_current_bundle_settings_do_not_prompt(self):
+        self.prepare_model_settings()
+        self.prepare_startup()
+        with tempfile.TemporaryDirectory() as directory:
+            previous, current = self.moved_settings_paths(directory)
+            content = '{"maps":{"Same":22}}'
+            previous.write_text(content)
+            current.write_text(content)
+            with patch.dict(self.env, __file__=str(current.parent / "script.py"),
+                            SETTINGS_FILE=str(current)):
+                self.win._startup_load()
+            self.assertEqual({"Same": 22}, self.win.S["maps"])
+            self.assertIn(str(current), self.win._settings_source)
+            self.env["forms"].alert.assert_not_called()
+
+    def test_conflicting_bundle_settings_offer_both_sources_without_writes(self):
+        for choice, expected, source_name in (
+                ("Use previous Custom Tools settings", {"Previous": 22}, "previous"),
+                ("Use current ETC PyTools settings", {"Current": 33}, "current")):
+            with self.subTest(choice=choice), tempfile.TemporaryDirectory() as directory:
+                api = self.prepare_model_settings()
+                self.prepare_startup()
+                previous, current = self.moved_settings_paths(directory)
+                previous_text = '{"maps":{"Previous":22}}'
+                current_text = '{"maps":{"Current":33}}'
+                previous.write_text(previous_text)
+                current.write_text(current_text)
+                self.env["forms"].alert.reset_mock(return_value=True)
+                self.env["forms"].alert.return_value = choice
+                with patch.dict(self.env, __file__=str(current.parent / "script.py"),
+                                SETTINGS_FILE=str(current)):
+                    self.win._startup_load()
+                self.assertEqual(expected, self.win.S["maps"])
+                self.assertIn(str(previous if source_name == "previous" else current),
+                              self.win._settings_source)
+                self.env["forms"].alert.assert_called_once()
+                self.assertEqual(previous_text, previous.read_text())
+                self.assertEqual(current_text, current.read_text())
+                self.assertEqual([], api.transactions)
+
+    def test_cancelling_conflicting_settings_keeps_both_files_untouched(self):
+        api = self.prepare_model_settings()
+        self.prepare_startup()
+        self.win._settings_ready = False
+        with tempfile.TemporaryDirectory() as directory:
+            previous, current = self.moved_settings_paths(directory)
+            previous.write_text('{"maps":{"Previous":22}}')
+            current.write_text('{"maps":{"Current":33}}')
+            self.env["forms"].alert.return_value = None
+            with patch.dict(self.env, __file__=str(current.parent / "script.py"),
+                            SETTINGS_FILE=str(current)):
+                with self.assertRaisesRegex(ValueError, "cancel"):
+                    self.win._startup_load()
+            self.assertEqual('{"maps":{"Previous":22}}', previous.read_text())
+            self.assertEqual('{"maps":{"Current":33}}', current.read_text())
+            self.assertEqual([], api.transactions)
+            self.assertFalse(self.win._settings_ready)
+
+    def test_saved_model_settings_take_precedence_over_both_bundle_files(self):
+        api = self.prepare_model_settings()
+        self.prepare_startup()
+        self.env["save_model_settings"](api.document, {"maps": {"RVT": 44}}, None)
+        with tempfile.TemporaryDirectory() as directory:
+            previous, current = self.moved_settings_paths(directory)
+            previous.write_text('{"maps":{"Previous":22}}')
+            current.write_text('{"maps":{"Current":33}}')
+            with patch.dict(self.env, __file__=str(current.parent / "script.py"),
+                            SETTINGS_FILE=str(current)):
+                self.win._startup_load()
+            self.assertEqual({"RVT": 44}, self.win.S["maps"])
+            self.assertEqual("RVT Extensible Storage", self.win._settings_source)
+            self.env["forms"].alert.assert_not_called()
+
+    def test_invalid_previous_bundle_settings_report_the_file(self):
+        self.prepare_model_settings()
+        self.prepare_startup()
+        with tempfile.TemporaryDirectory() as directory:
+            previous, current = self.moved_settings_paths(directory)
+            previous.write_text('{"maps":')
+            with patch.dict(self.env, __file__=str(current.parent / "script.py"),
+                            SETTINGS_FILE=str(current)):
+                with self.assertRaisesRegex(ValueError, "Could not load settings"):
+                    self.win._startup_load()
+            self.assertEqual('{"maps":', previous.read_text())
+
+    def test_conflict_loads_only_the_chosen_valid_bundle_file(self):
+        self.prepare_model_settings()
+        self.prepare_startup()
+        with tempfile.TemporaryDirectory() as directory:
+            previous, current = self.moved_settings_paths(directory)
+            previous.write_text('{"maps":{"Previous":22}}')
+            current.write_text('{"maps":')
+            self.env["forms"].alert.return_value = "Use previous Custom Tools settings"
+            with patch.dict(self.env, __file__=str(current.parent / "script.py"),
+                            SETTINGS_FILE=str(current)):
+                self.win._startup_load()
+            self.assertEqual({"Previous": 22}, self.win.S["maps"])
+            self.assertEqual('{"maps":', current.read_text())
 
     def test_model_save_reload_preserves_mappings_rules_categories_and_large_ids(self):
         api = self.prepare_model_settings()

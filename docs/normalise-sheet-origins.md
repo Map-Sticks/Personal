@@ -1,10 +1,10 @@
 # Normalise Sheet Origins
 
-`CustomPyRevit.extension/Custom Tools.tab/Getting Started.panel/Normalise Sheet Origins.pushbutton`
+`CustomPyRevit.extension/ETC PyTools.tab/Views and Sheets.panel/Normalise Sheet Origins.pushbutton`
 
 ## Use
 
-1. Click the button in a project.
+1. In a project, click **ETC PyTools > Views and Sheets > Sheet Origin Align**.
 2. Pick the **reference** sheet (one that is placed correctly). Close the picker to stop.
 3. Choose the scope: **Audit all sheets** or **Choose sheets to audit...** (Esc stops).
 4. **Audit** (read-only) runs with a progress bar; **Cancel** stops it and reports what was audited so

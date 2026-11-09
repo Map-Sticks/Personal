@@ -3,7 +3,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-LIB = (Path(__file__).resolve().parents[1] / "CustomPyRevit.extension" / "Custom Tools.tab"
+LIB = (Path(__file__).resolve().parents[1] / "CustomPyRevit.extension" / "ETC PyTools.tab"
        / "Electrical.panel" / "Draw Switchlines.pushbutton" / "lib" / "switchline_logic.py")
 _spec = importlib.util.spec_from_file_location("switchline_logic", LIB)
 L = importlib.util.module_from_spec(_spec)

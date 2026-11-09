@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[1]
     / "CustomPyRevit.extension"
-    / "Custom Tools.tab"
+    / "ETC PyTools.tab"
     / "Getting Started.panel"
     / "List Sheets.pushbutton"
     / "script.py"

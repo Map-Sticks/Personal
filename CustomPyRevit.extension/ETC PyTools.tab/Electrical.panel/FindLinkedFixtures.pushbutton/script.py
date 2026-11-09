@@ -38,8 +38,8 @@ uidoc  = revit.uidoc
 output = script.get_output()
 logger = script.get_logger()
 FT     = 1.0 / 304.8
-SETTINGS_FILE = os.path.join(os.path.dirname(__file__),
-    "find_linked_fixtures_settings.json")
+SETTINGS_FILENAME = "find_linked_fixtures_settings.json"
+SETTINGS_FILE = os.path.join(os.path.dirname(__file__), SETTINGS_FILENAME)
 SETTINGS_SCHEMA_ID = "62c080d4-e64b-48fc-b6aa-61c4598f9b37"
 SETTINGS_SCHEMA_NAME = "MapSticksFindLinkedFixturesSettings"
 SETTINGS_FIELD = "Payload"
@@ -376,6 +376,37 @@ def load_s(path=None):
         return validated_settings(ld)
     except Exception as ex:
         raise ValueError("Could not load settings from:\n{}\n\n{}\n\nThe file has not been overwritten.".format(source,ex))
+
+def previous_bundle_settings_file():
+    return os.path.abspath(os.path.join(
+        os.path.dirname(__file__),os.pardir,os.pardir,os.pardir,
+        "Custom Tools.tab","Electrical.panel","FindLinkedFixtures.pushbutton",SETTINGS_FILENAME))
+
+def settings_draft_file():
+    previous=previous_bundle_settings_file()
+    current_exists=os.path.exists(SETTINGS_FILE)
+    previous_exists=os.path.exists(previous)
+    if current_exists and previous_exists:
+        with io.open(SETTINGS_FILE,"rb") as current_file:
+            with io.open(previous,"rb") as previous_file:
+                different=current_file.read()!=previous_file.read()
+        if different:
+            previous_choice="Use previous Custom Tools settings"
+            current_choice="Use current ETC PyTools settings"
+            choice=forms.alert(
+                "Two different settings files exist:\n\nPrevious: {}\n\nCurrent: {}\n\n"
+                "Choose the JSON draft to load. Neither file will be overwritten.".format(
+                    previous,SETTINGS_FILE),
+                title="Find Linked Fixtures settings",
+                options=[previous_choice,current_choice,"Cancel"])
+            if choice==previous_choice: return previous
+            if choice==current_choice: return SETTINGS_FILE
+            raise ValueError("Settings selection cancelled. No settings were changed; "
+                             "use Reload RVT to choose again.")
+    if current_exists: return SETTINGS_FILE
+    if previous_exists: return previous
+    return None
+
 def settings_json(data):
     return json.dumps(settings_for_json(validated_settings(data)),
                       indent=2,sort_keys=True,allow_nan=False)
@@ -705,11 +736,13 @@ class Win(forms.WPFWindow):
         saved=settings_json(data) if data is not None else None
         if data is not None:
             source="RVT Extensible Storage"
-        elif os.path.exists(SETTINGS_FILE):
-            data=load_s()
-            source="Legacy JSON draft (not yet in RVT): "+SETTINGS_FILE
         else:
-            data=defs();source="New settings (not yet in RVT)"
+            draft=settings_draft_file()
+            if draft:
+                data=load_s(draft)
+                source="Legacy JSON draft (not yet in RVT): "+draft
+            else:
+                data=defs();source="New settings (not yet in RVT)"
         self._settings_token=token;self._saved_settings=saved
         self._apply_loaded_settings(data,source)
 

@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 
 
 BUNDLE = (Path(__file__).resolve().parents[1] / "CustomPyRevit.extension"
-          / "Custom Tools.tab" / "Electrical.panel" / "CableTrayCoordinator.pushbutton")
+          / "ETC PyTools.tab" / "Electrical.panel" / "CableTrayCoordinator.pushbutton")
 
 spec = importlib.util.spec_from_file_location("cable_tray_logic", BUNDLE / "lib" / "cable_tray_logic.py")
 logic = importlib.util.module_from_spec(spec)

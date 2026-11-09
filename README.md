@@ -20,19 +20,20 @@ total sheet count. Placeholder sheets and sheets not shown in the sheet list
 are included; linked projects are not queried. It reports a clear message if
 there is no open project, the active document is a family, or there are no sheets.
 
-`Normalise Sheet Origins` (Getting Started panel) audits and aligns sheets to a reference sheet. Pick
-the reference; every sheet is audited and misaligned ones are listed with their offset. Align all,
-choose some, or audit only, and optionally save a CSV record. Each moved sheet's title block and all its content (viewports,
-schedules, text, lines, etc.) move by one shift so the title block's bottom-left corner matches the
-reference. Elements inside the title block family follow it automatically. Each sheet is checked
-after the move and rolled back if the corner did not land; the output window lists each sheet's offset
-and the action taken. See [docs/normalise-sheet-origins.md](docs/normalise-sheet-origins.md).
+`Normalise Sheet Origins` (shown as **Sheet Origin Align** in the Views and Sheets panel) audits and
+aligns sheets to a reference sheet. Pick the reference; every sheet is audited and misaligned
+ones are listed with their offset. Align all, choose some, or audit only, and optionally save a
+CSV record. Each moved sheet's title block and all its content (viewports, schedules, text,
+lines, etc.) move by one shift so the title block's bottom-left corner matches the reference.
+Elements inside the title block family follow it automatically. Each sheet is checked after the
+move and rolled back if the corner did not land; the output window lists each sheet's offset and
+the action taken. See [docs/normalise-sheet-origins.md](docs/normalise-sheet-origins.md).
 
-`Place Ceiling Devices` (Electrical panel) is a **scaffold only**: it shows a "not implemented"
+`Place Ceiling Devices` is a **scaffold only**, hidden from the ribbon: it shows a "not implemented"
 alert. Requirements and lessons learned are in its `CONTEXT.md`.
 
-`Route Cable Along Tray` (Electrical panel) is also a **scaffold only**; it will route a circuit
-path along cable trays and report cable length. See its `CONTEXT.md`.
+`Route Cable Along Tray` is also a **scaffold only**, hidden from the ribbon; it will route a
+circuit path along cable trays and report cable length. See its `CONTEXT.md`.
 
 `Find Linked Fixtures` (Electrical panel) scans point-based elements inside a selected host MEP
 Space. **Linked Scan Categories...** offers all top-level categories exposed by the selected
@@ -58,7 +59,9 @@ changing the stored settings; export your edits before reloading if needed.
 **Import Settings...** reads a previous JSON and confirms its mapping/rule counts;
 **Export Settings...** creates a separately chosen JSON backup. Import is a window draft until saved
 to RVT. Existing RVT settings always take precedence, even when empty. Without RVT settings, the
-old bundle JSON is offered as a read-only migration draft, never overwritten automatically.
+bundle JSON is offered as a read-only migration draft, never overwritten automatically. If both
+the previous Custom Tools and current ETC PyTools JSON files exist and differ, choose which draft
+to load.
 The footer identifies the source, counts mappings/rules and reports how many target IDs exist in
 this host project. IDs are still project-specific; imported missing targets require remapping.
 IDs travel as exact decimal strings for IronPython JSON compatibility; legacy numeric IDs also load.
@@ -73,9 +76,10 @@ row-specific add/remove actions, unassigned circuits grouped by fixture level, a
 Panel rows show the panel family and type, can be filtered by level, family and type, and can be
 selected in the model (for the Properties palette) or shown in Revit directly from the list.
 Model-access actions are routed through ExternalEvent with document guards and indexed circuit
-memberships. Settings are stored in `%APPDATA%/CircuitHub/circuit_hub_settings.json`.
+memberships. Settings are stored in `%APPDATA%/CircuitHub/circuit_hub_settings.json`; if absent,
+settings from an older bundle location are read and written to the current location on the next save.
 Virtual panels, panel creation, and level editing remain future work. See
-[CircuitHub context and Revit acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CircuitHub.pushbutton/CONTEXT.md);
+[CircuitHub context and Revit acceptance checks](CustomPyRevit.extension/ETC%20PyTools.tab/Electrical.panel/CircuitHub.pushbutton/CONTEXT.md);
 actual Revit validation is still required.
 
 `Draw Switchlines` (Electrical panel) is a drafting aid that works only in the active plan or RCP.
@@ -118,10 +122,11 @@ give per-category quantities per row, replacing separate per-category schedules.
 Revit reads and selection changes run through ExternalEvent; the window itself only uses cached data.
 Settings are stored in `%APPDATA%/pyRevit/ParameterBrowser.settings.json`.
 
-`Cable Tray Coordinator` (Electrical panel) is a modeless window that re-routes a straight
-cable tray past an obstacle in the ceiling void. Pick a method (Auto, rise over, drop under,
-offset left/right, 90/60/45/30 degree bends, manual offset such as "drop 300 mm", or saved user
-presets), pick the tray and the obstacle (host or linked), and review the live preview before Apply.
+`Cable Tray Coordinator` (shown as **Tray Coordinator** in the Electrical panel) is a modeless
+window that re-routes a straight cable tray past an obstacle in the ceiling void. Pick a method
+(Auto, rise over, drop under, offset left/right, 90/60/45/30 degree bends, manual offset such as
+"drop 300 mm", or saved user presets), pick the tray and the obstacle (host or linked), and
+review the live preview before Apply.
 **Detour** mode cuts the tray, moves the middle and re-joins it with fittings; **Bridge** mode fills
 a gap between two cut tray ends, straight or around the obstacle. Auto mode works out the smallest
 clear offset from the obstacle geometry. The rest of the run is not moved, parameters are copied,
@@ -149,12 +154,13 @@ break, ask for confirmation before Apply and are never saved as your settings.
 **Revert last route** restores the original geometry/connections and retains the selections for
 another attempt; subsequent model edits disable it for safety. Before commit the new route is
 solid-intersected with the selected obstacles and rolled back on a real clash. See
-[Cable Tray Coordinator context and Revit acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CableTrayCoordinator.pushbutton/CONTEXT.md);
+[Cable Tray Coordinator context and Revit acceptance checks](CustomPyRevit.extension/ETC%20PyTools.tab/Electrical.panel/CableTrayCoordinator.pushbutton/CONTEXT.md);
 actual Revit validation is still required.
 
-`Parameter Browser WebView` (Electrical panel, **pyRevit 7+**) is the same read-only browser rendered as
-HTML in pyRevit 7's WebView2 output window, following the pattern of the working WebView example: the
-command reads the model once and injects the data plus `app.js`/`app.css`; no custom window,
+`Parameter Browser WebView` (shown as **Parameter WebView** in the Electrical panel, **pyRevit 7+**)
+is the same read-only browser rendered as HTML in pyRevit 7's WebView2 output window, following
+the pattern of the working WebView example: the command reads the model once and injects the data
+plus `app.js`/`app.css`; no custom window,
 persistent engine or ExternalEvent is involved. Search, sorting, source/scope/level, the column chooser
 (with order, drag-to-reorder and resizable columns), `Count:` columns, the "Elements in selection" tree,
 Copy and CSV export all run in the browser. **Select / Show** use pyRevit's `revit://outputhelpers`
@@ -163,111 +169,46 @@ localStorage (seeded from the classic button's settings file).
 
 ## ETC PyTools toolbar
 
-The imported work-computer buttons are organized under
+The 26 implemented commands are placed directly on the ribbon, in this order, under
 `CustomPyRevit.extension/ETC PyTools.tab`:
 
-- **Electrical:** Manual Wall Placement; Place Fixtures.
-- **Family Tools:** Family Offset Setup; Switch Colour Setup; Middle Family Parameter Setup.
-- **Model Tools:** Align Section Box; Color Scheme Editor; Flip Workplane; Focus Select.
-- **Revisions:** Custom Revision Setup; Apply Revisions; Remove Revisions.
-- **Spaces:** Align Elevation Rows; Space Plans Stage 3.
-- **Views and Sheets:** Legend Builder; Number Viewports.
-- **Asset Management:** NWB Asset ID (asset IDs plus Space-based room IDs/names).
+- **Electrical:** Place Fixtures; Manual Wall Placement; Find Linked Fixtures; Draw Switchlines;
+  Circuit Hub; Tray Coordinator; Parameter Browser; Parameter WebView (pyRevit 7+).
+- **Model Tools:** Focus Select; Align Section Box; Flip Workplane; Color Scheme Editor.
+- **Family Tools:** Offset Setup; Middle Family Params; Switch Colour Setup.
+- **Spaces:** Space Plans Stage 3.6; Align Elev. Rows.
+- **Views and Sheets:** Legend Builder; Number Viewports; Sheet Origin Align.
+- **Revisions:** Revision Setup; Apply Revisions; Remove Revisions.
+- **Asset Management:** NWB Asset ID.
+- **Getting Started:** Document Info; List Sheets.
 
-The uploaded Cable Tray Coordinator, Find Linked Fixtures, Circuiting/Circuit Hub, Normalise Sheet
-Origins, and Parameter Browser scripts match buttons already in **Custom Tools**, so those copies were
-not duplicated. The older Space Plans v1 and single-purpose NWB Asset ID variants were excluded in
-favor of the explicitly later Stage 3.6 and expanded NWB versions. The redundant selection-only Legend
-Builder was also omitted. The three archived Place Fixtures ZIP backups were removed; the current
-bundle is kept.
+Each command has its own icon, and short ribbon labels retain their full tooltips. The two
+unfinished Electrical scaffolds, **Place Ceiling Devices** and **Route Cable Along Tray**, and the
+**Modeless Window** template are hidden from the ribbon but retained in their existing folders.
+Existing button and panel paths are unchanged by this toolbar layout, preserving their pyRevit
+identities and shortcuts. The classic and WebView Parameter Browsers remain separate; the WebView
+button requires pyRevit 7 to run. Existing Revit version and document-context restrictions still
+apply, and Revit may collapse panels when screen space is limited. The older Space Plans v1,
+single-purpose NWB Asset ID variants and redundant selection-only Legend Builder remain excluded.
 
-```text
-CustomPyRevit.extension/
-└── Custom Tools.tab/
-    ├── Electrical.panel/
-    │   ├── CableTrayCoordinator.pushbutton/
-    │   │   ├── bundle.yaml
-    │   │   ├── CONTEXT.md
-    │   │   ├── lib/
-    │   │   │   └── cable_tray_logic.py
-    │   │   ├── script.py
-    │   │   └── ui.xaml
-    │   ├── CircuitHub.pushbutton/
-    │   │   ├── bundle.yaml
-    │   │   ├── CONTEXT.md
-    │   │   ├── lib/
-    │   │   │   └── circuit_hub_logic.py
-    │   │   ├── script.py
-    │   │   └── ui.xaml
-    │   ├── Draw Switchlines.pushbutton/
-    │   │   ├── bundle.yaml
-    │   │   ├── icon.png
-    │   │   ├── lib/
-    │   │   │   └── switchline_logic.py
-    │   │   ├── script.py
-    │   │   └── window.xaml
-    │   ├── ParameterBrowser.pushbutton/
-    │   │   ├── bundle.yaml
-    │   │   ├── lib/
-    │   │   │   └── parameter_browser_logic.py
-    │   │   ├── README.txt
-    │   │   ├── script.py
-    │   │   └── UI.xaml
-    │   ├── ParameterBrowser WebView.pushbutton/
-    │   │   ├── app.css
-    │   │   ├── app.js
-    │   │   ├── bundle.yaml
-    │   │   ├── lib/
-    │   │   │   ├── parameter_browser_logic.py
-    │   │   │   └── parameter_browser_webview_data.py
-    │   │   ├── README.txt
-    │   │   └── script.py
-    │   ├── Place Ceiling Devices.pushbutton/
-    │   │   ├── CONTEXT.md
-    │   │   ├── bundle.yaml
-    │   │   └── script.py
-    │   └── Route Cable Along Tray.pushbutton/
-    │       ├── CONTEXT.md
-    │       ├── bundle.yaml
-    │       └── script.py
-    └── Getting Started.panel/
-        ├── Document Info.pushbutton/
-        │   ├── bundle.yaml
-        │   └── script.py
-        └── List Sheets.pushbutton/
-            ├── bundle.yaml
-            └── script.py
-```
+### Upgrading from Custom Tools
 
-```text
-CustomPyRevit.extension/
-└── ETC PyTools.tab/
-    ├── Asset Management.panel/
-    │   └── NWB Asset ID.pushbutton/
-    ├── Electrical.panel/
-    │   ├── Manual Wall Placement.pushbutton/
-    │   ├── Place Fixtures.pushbutton/
-    │   └── FixtureTools.lib/
-    ├── Family Tools.panel/
-    │   ├── Family Offset Setup.pushbutton/
-    │   ├── Middle Family Parameters.pushbutton/
-    │   └── Switch Colour Setup.pushbutton/
-    ├── Model Tools.panel/
-    │   ├── Align Section Box.pushbutton/
-    │   ├── Color Scheme Editor.pushbutton/
-    │   ├── Flip Workplane.pushbutton/
-    │   └── Focus Select.pushbutton/
-    ├── Revisions.panel/
-    │   ├── Apply Revisions.pushbutton/
-    │   ├── Custom Revision Setup.pushbutton/
-    │   └── Remove Revisions.pushbutton/
-    ├── Spaces.panel/
-    │   ├── Align Elevation Rows.pushbutton/
-    │   └── Space Plans Stage 3.pushbutton/
-    └── Views and Sheets.panel/
-        ├── Legend Builder.pushbutton/
-        └── Number Viewports.pushbutton/
-```
+Close old modeless windows and back up any JSON settings in the old button folders before updating
+or replacing the extension. Project-stored Find Linked Fixtures settings take priority. If no RVT
+settings exist, the button can recover the old bundle JSON while it remains in its previous
+location; if old and new copies differ, it asks which draft to use. Save to RVT and save/sync the
+project to retain the selected settings.
+
+Circuit Hub prefers its existing AppData settings; if that file is absent, it reads a current or
+previous bundle-local settings file and saves to AppData on the next settings save. When AppData is
+unavailable, it saves in the current bundle instead. Keep the old JSON backup until the new settings
+have been checked.
+
+After transferring the settings and keeping backups outside the extension, move the obsolete
+`Custom Tools.tab` folder out of the extension. A leftover settings-only pushbutton folder can
+still be detected by pyRevit. Retain the old Find Linked Fixtures JSON backup for **Import
+Settings...** if other projects still need it. Moving commands changes their pyRevit identities, so
+any previous shortcuts or favorites may need to be assigned again.
 
 ## AI-assisted development kit
 
@@ -287,27 +228,51 @@ CustomPyRevit.extension/
 2. In Revit, open pyRevit Settings and add this repository's root directory to
    **Custom Extension Directories**. That directory contains
    `CustomPyRevit.extension`.
-3. Reload pyRevit from its ribbon tab. The **Custom Tools** and **ETC PyTools**
-   tabs should appear. Existing starter buttons remain under **Custom Tools**;
-   the imported buttons are grouped in the panels listed above.
+3. Reload pyRevit from its ribbon tab. The **ETC PyTools** tab should appear,
+   with the implemented buttons grouped in the panels listed above. Restart Revit
+   if an old ribbon tab remains visible after reloading.
 4. After editing a script or its bundle metadata, reload pyRevit to see the
    changes. Test model-changing tools in a disposable project first.
 
 ## Add a button
 
 1. Create a folder ending in `.pushbutton` inside an existing `.panel` folder.
-   The folder name becomes the command name unless `bundle.yaml` provides a
-   title.
+   The folder path determines the command identity; metadata can set its displayed title.
 2. Add `script.py` as the command entry point and `bundle.yaml` with the
    button title and tooltip.
 3. Add a unique, purpose-made `icon.png` for every button (96x96 recommended);
    do not reuse a generic icon from another bundle. Shared Python modules can
    live in a `lib/` folder at the button, panel, tab, or extension level.
-4. Reload pyRevit and test the button in Revit.
+4. Add its folder name without `.pushbutton` to the panel's `bundle.yaml` layout; otherwise
+   pyRevit will not show it. A short two-line label can be set with a single-quoted directive such
+   as `'My Button[title:My\nButton]'`. Add a new panel's name without `.panel` to the tab's
+   `bundle.yaml` layout as well.
+5. Reload pyRevit and test the button in Revit.
 
 The same folder-suffix convention applies when adding tabs (`.tab`) and panels
 (`.panel`). See the [pyRevit extension documentation](https://docs.pyrevitlabs.io/extensions/)
 for bundle types, metadata, script engines, and the Revit API environment.
+
+## Check the toolbar
+
+The layout and PNG checks run without Revit or third-party Python packages:
+
+```sh
+python -m unittest discover -s tests -p test_extension_layout.py -v
+```
+
+In Revit 2023-2025, close any old modeless tool windows and reload pyRevit. Verify the eight
+panels, their button order, readable short labels and distinct icons against the list above.
+All 26 implemented commands should be directly on the ribbon; the two scaffolds and the
+Modeless Window template should not appear. Some commands may be disabled by their normal
+context rules, **Parameter WebView** requires pyRevit 7 or newer, and Revit may collapse panels
+if the window is too narrow.
+
+Open a project, click **ETC PyTools > Getting Started > Document Info**, and confirm the output
+reports the document name and selection count. Click **List Sheets** and confirm the sheet list
+and total; neither button should change the model. Check any model-changing commands in a
+disposable project. Ribbon rendering, shortcuts and Revit API behavior still require testing
+inside Revit.
 
 ## Check List Sheets
 
@@ -325,7 +290,7 @@ Before merging this button's pull request:
 
 1. Get this branch's files onto your Windows machine and load the extension
    using the steps above.
-2. Open a project with sheets and click **Custom Tools > Getting Started >
+2. Open a project with sheets and click **ETC PyTools > Getting Started >
    List Sheets**.
 3. Compare the output against a sheet schedule that includes all sheets,
    including placeholders. Check the numbers, names, placeholder status, and total.
@@ -343,7 +308,7 @@ These tests use mock Revit/WPF objects to check rename validation, cancellation,
 document guards, deferred callbacks, membership indexing, row-specific removal, and XAML control
 wiring. They do not run Revit or IronPython. Run all repository checks with
 `python -m unittest discover -s tests -v`, then follow the
-[CircuitHub acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CircuitHub.pushbutton/CONTEXT.md#revit-acceptance-checks-disposable-project)
+[CircuitHub acceptance checks](CustomPyRevit.extension/ETC%20PyTools.tab/Electrical.panel/CircuitHub.pushbutton/CONTEXT.md#revit-acceptance-checks-disposable-project)
 in a disposable Revit project.
 
 ## Check Parameter Browser
@@ -367,7 +332,7 @@ These tests cover obstacle clipping and required offsets, auto direction choice,
 normal geometry for each bend angle, detour/bridge validation, presets and parameter parsing,
 preview primitives, XAML handler wiring, and `build_route` against fake Revit objects (far-end
 reconnection, fitting-failure rollback). Revit must still confirm fitting creation and picking; follow the
-[acceptance checks](CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/CableTrayCoordinator.pushbutton/CONTEXT.md#6-revit-acceptance-checks-disposable-project).
+[acceptance checks](CustomPyRevit.extension/ETC%20PyTools.tab/Electrical.panel/CableTrayCoordinator.pushbutton/CONTEXT.md#6-revit-acceptance-checks-disposable-project).
 
 ## Check Parameter Browser WebView
 

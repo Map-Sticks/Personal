@@ -188,7 +188,7 @@ column...) with a few clicks, using predefined methods, with a preview before th
 
 ## 6. Revit acceptance checks (disposable project)
 
-1. Reload pyRevit; **Custom Tools > Electrical > Cable Tray Coordinator** opens a modeless window;
+1. Reload pyRevit; **ETC PyTools > Electrical > Tray Coordinator** opens a modeless window;
    Revit stays usable.
 2. Detour: pick a tray, add a beam (host or linked) that clashes; Auto 45 shows a preview; Apply.
    Check: cut positions, 4 elbows, original start connection intact, the far-end fitting/neighbour

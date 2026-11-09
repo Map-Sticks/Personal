@@ -12,8 +12,8 @@ from unittest.mock import Mock, patch
 
 
 BUNDLE = (Path(__file__).resolve().parents[1] / "CustomPyRevit.extension"
-          / "Custom Tools.tab" / "Electrical.panel" / "ParameterBrowser WebView.pushbutton")
-CLASSIC_LOGIC = (Path(__file__).resolve().parents[1] / "CustomPyRevit.extension" / "Custom Tools.tab"
+          / "ETC PyTools.tab" / "Electrical.panel" / "ParameterBrowser WebView.pushbutton")
+CLASSIC_LOGIC = (Path(__file__).resolve().parents[1] / "CustomPyRevit.extension" / "ETC PyTools.tab"
                  / "Electrical.panel" / "ParameterBrowser.pushbutton" / "lib" / "parameter_browser_logic.py")
 NODE = shutil.which("node")
 

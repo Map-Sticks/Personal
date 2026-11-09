@@ -2,8 +2,8 @@
 
 ## Scope and compatibility
 
-Reviewed the complete [button script](../CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/FindLinkedFixtures.pushbutton/script.py),
-[XAML](../CustomPyRevit.extension/Custom%20Tools.tab/Electrical.panel/FindLinkedFixtures.pushbutton/ui.xaml),
+Reviewed the complete [button script](../CustomPyRevit.extension/ETC%20PyTools.tab/Electrical.panel/FindLinkedFixtures.pushbutton/script.py),
+[XAML](../CustomPyRevit.extension/ETC%20PyTools.tab/Electrical.panel/FindLinkedFixtures.pushbutton/ui.xaml),
 saved-settings format, and the repository's modeless-window/API guidance before changing the button.
 Target: IronPython 2.7, pyRevit 4.8.x through 6.x, Revit 2023-2025.
 No new runtime dependencies. The icon and existing project-specific settings file were not changed.
@@ -98,8 +98,10 @@ prevention are not implemented in this pass.
   document, not the RVT on disk or central. Model save, sync, Undo, worksharing ownership and
   close/reopen persistence still require real Revit acceptance tests.
 - Model settings take precedence even with zero mappings/rules. Only when no model record exists
-  is the old bundle JSON loaded as a clearly labelled, read-only migration **draft**. Save to RVT
-  is required to adopt it. Missing model data and missing legacy JSON start an unsaved default draft.
+  is a bundle JSON loaded as a clearly labelled, read-only migration **draft**. The previous
+  Custom Tools location remains a recovery source; if both locations contain different JSON,
+  choose which draft to load. Neither file is overwritten. Save to RVT is required to adopt it.
+  Missing model data and missing legacy JSON start an unsaved default draft.
   Corrupt/future-version payloads, duplicate storage records and unreadable JSON fail explicitly;
   they do not silently become empty defaults.
 - Import reads UTF-8 with optional BOM, validates the outer structure, and shows mapping/rule
@@ -228,7 +230,7 @@ Commands:
 ```text
 python -m unittest discover -s tests -p test_find_linked_fixtures.py -v
 python -m unittest discover -s tests -v
-python -m py_compile "CustomPyRevit.extension/Custom Tools.tab/Electrical.panel/FindLinkedFixtures.pushbutton/script.py"
+python -m py_compile "CustomPyRevit.extension/ETC PyTools.tab/Electrical.panel/FindLinkedFixtures.pushbutton/script.py"
 git diff --check
 ```
 
@@ -255,7 +257,7 @@ Neither IronPython execution nor Revit 2023/2024/2025 runtime compatibility is c
 
 Use a disposable copy of a project, not the live model. Back up the existing settings file.
 Close any previous button window, reload pyRevit, then open
-**Custom Tools > Electrical > Find Linked Fixtures**.
+**ETC PyTools > Electrical > Find Linked Fixtures**.
 
 1. **Existing workflow:** select the original loaded link and a simple bounded MEP Space in
    a plan on the same level. Confirm previous scan selections, mapping targets, rule order,
@@ -339,3 +341,7 @@ WPF behavior and final model geometry. Do not equate passing mock tests with pro
    must not silently become defaults or overwrite existing data. Open and close immediately before
    initialization; no settings write should occur. Exercise WPF save-and-close timing in Revit.
    A damaged model record requires investigation; do not delete stored data merely to bypass errors.
+8. For the tab move, use a disposable project without an RVT settings record and keep backups of
+   both bundle JSON files. If the previous and current files differ, confirm the prompt can load
+   either draft and Cancel leaves both untouched. Save the chosen draft to RVT, save/sync, reopen
+   and confirm the model settings now take precedence. If the files match, no choice is needed.

@@ -16,7 +16,7 @@ Before writing or changing any button, read:
 - Verify every Revit API type/member you are unsure about: `python tools/revit_api_lookup.py <name> [--ui] [--year N]`.
   Do not invent API names or signatures. If it cannot be verified, say so.
 - Any model change is inside a transaction (`with revit.Transaction("name"):`). Read-only tools never open one.
-- **Modeless windows**: start from `Custom Tools.tab/Templates.panel/Modeless Window.pushbutton`. Always set
+- **Modeless windows**: start from `ETC PyTools.tab/Templates.panel/Modeless Window.pushbutton`. Always set
   `__persistentengine__ = True`, always do model work in an `IExternalEventHandler.Execute` via `ExternalEvent.Raise()`,
   create the event in `__init__`, never call the Revit API from click handlers directly.
 - Prefer pyRevit built-ins (`forms.alert`, `forms.SelectFromList`, ...) over custom XAML when they are enough.

@@ -1,0 +1,9 @@
+layout:
+  - 'Place Fixtures[title:Place\nFixtures]'
+  - 'Manual Wall Placement[title:Manual Wall\nPlacement]'
+  - 'FindLinkedFixtures[title:Find Linked\nFixtures]'
+  - 'Draw Switchlines[title:Draw\nSwitchlines]'
+  - 'CircuitHub[title:Circuit\nHub]'
+  - 'CableTrayCoordinator[title:Tray\nCoordinator]'
+  - 'ParameterBrowser[title:Parameter\nBrowser]'
+  - 'ParameterBrowser WebView[title:Parameter\nWebView]'

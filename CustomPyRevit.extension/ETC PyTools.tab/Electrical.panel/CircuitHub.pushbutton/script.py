@@ -60,10 +60,27 @@ def settings_file_path():
         if not os.path.exists(folder):
             os.makedirs(folder)
         return os.path.join(folder, "circuit_hub_settings.json")
-    except Exception:
-        return os.path.join(os.path.dirname(__file__), "circuit_hub_settings.json")
+    except Exception as error:
+        fallback = os.path.join(os.path.dirname(__file__), "circuit_hub_settings.json")
+        LOGGER.warning("CircuitHub settings folder unavailable ({}); using {}.".format(error, fallback))
+        return fallback
 
 SETTINGS_FILE = settings_file_path()
+
+
+def previous_bundle_settings_file():
+    return os.path.abspath(os.path.join(
+        os.path.dirname(__file__), os.pardir, os.pardir, os.pardir,
+        "Custom Tools.tab", "Electrical.panel", "CircuitHub.pushbutton",
+        "circuit_hub_settings.json"))
+
+
+def settings_read_path():
+    local_file = os.path.join(os.path.dirname(__file__), "circuit_hub_settings.json")
+    for path in (SETTINGS_FILE, local_file, previous_bundle_settings_file()):
+        if os.path.exists(path):
+            return path
+    return None
 
 
 def default_settings():
@@ -80,14 +97,21 @@ def default_settings():
 
 def load_settings():
     data = default_settings()
+    source = settings_read_path()
+    if source is None:
+        return data
     try:
-        if os.path.exists(SETTINGS_FILE):
-            with open(SETTINGS_FILE, "r") as f:
-                loaded = json.load(f)
-            if isinstance(loaded, dict):
-                data.update(loaded)
-    except Exception:
-        pass
+        with open(source, "r") as f:
+            loaded = json.load(f)
+        if not isinstance(loaded, dict):
+            raise ValueError("CircuitHub settings must be a JSON object.")
+        data.update(loaded)
+        if source != SETTINGS_FILE:
+            LOGGER.info("Reading CircuitHub settings from {}; future saves go to {}.".format(
+                source, SETTINGS_FILE))
+    except Exception as error:
+        LOGGER.error("Could not load CircuitHub settings from {}: {}".format(source, error))
+        raise
     return data
 
 
@@ -925,7 +949,7 @@ class CircuitHub(forms.WPFWindow):
 
     # ---------------- settings / filter ----------------
     def save_current_settings(self):
-        return save_settings({
+        saved = save_settings({
             "level_filter": self.level_filter or "<All Levels>",
             "family_filter": self.family_filter or ALL_FAMILIES,
             "type_filter": self.type_filter or ALL_TYPES,
@@ -934,6 +958,9 @@ class CircuitHub(forms.WPFWindow):
             "show_empty_panels": bool(self.show_empty_panels),
             "auto_refresh_enabled": bool(self.auto_refresh_enabled)
         })
+        if not saved:
+            self.log("WARNING: CircuitHub settings could not be saved to {}.".format(SETTINGS_FILE))
+        return saved
 
     def sync_category_filter_ui(self):
         try:

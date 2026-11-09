@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 
 
 BUNDLE = (Path(__file__).resolve().parents[1] / "CustomPyRevit.extension"
-          / "Custom Tools.tab" / "Electrical.panel" / "ParameterBrowser.pushbutton")
+          / "ETC PyTools.tab" / "Electrical.panel" / "ParameterBrowser.pushbutton")
 
 spec = importlib.util.spec_from_file_location(
     "parameter_browser_logic", BUNDLE / "lib" / "parameter_browser_logic.py")

@@ -41,7 +41,7 @@ Rules (all required):
    (`uidoc.Selection.PickObject`), then show it again.
 
 A complete, working, commented implementation is in
-`CustomPyRevit.extension/Custom Tools.tab/Templates.panel/Modeless Window.pushbutton/`. **Copy that folder for
+`CustomPyRevit.extension/ETC PyTools.tab/Templates.panel/Modeless Window.pushbutton/`. **Copy that folder for
 every new modeless tool** and change only the XAML and the model-work methods.
 
 ## HTML / WebView2 tools (pyRevit 7+)
@@ -81,6 +81,9 @@ Modal `window.show_dialog()` runs inside the API context, so API calls and trans
 - `Tab.tab/Panel.panel/Name.pushbutton/` with `script.py`, `bundle.yaml` (`title`, `tooltip`, `author`),
   and a unique, purpose-made `icon.png` (96x96 recommended; `icon.dark.png` for dark theme), shared code in `lib/`.
   Do not reuse a generic icon from another button.
+- The ETC PyTools tab and panels have explicit `bundle.yaml` layouts: add new panel or button folder
+  names without their suffixes to the appropriate list, or pyRevit hides them. Panel layout directives
+  such as `'Name[title:Short\nLabel]'` change the ribbon label without changing the bundle path.
 - Reload pyRevit after any bundle/metadata change. Edits to a persistent-engine
   script need the old window closed first.
 - Useful module variables: `__title__`, `__doc__` (tooltip), `__author__`, `__persistentengine__`, `__min_revit_ver__`,

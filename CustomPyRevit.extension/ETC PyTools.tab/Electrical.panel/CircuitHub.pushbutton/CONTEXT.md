@@ -91,7 +91,9 @@ The **Panels** tab edits the built-in **Panel Name** parameter, not the family/t
   until Refresh, although actions no longer use stale membership data.
 - Existing best-effort property/level/phase helpers and some UI handlers still swallow exceptions.
   These have not been comprehensively rewritten.
-- Settings now use `%APPDATA%/CircuitHub/circuit_hub_settings.json`; save failures are reported.
+- Settings use `%APPDATA%/CircuitHub/circuit_hub_settings.json`. If absent, the current or old
+  Custom Tools bundle-local settings are read and migrated on the next save. If AppData is
+  unavailable, saves use the current bundle instead; read and save failures are reported.
 - `panel_level_name` guesses level via several parameters; confirm it matches the intended level for
   your families.
 - `phase_class` guesses phase from explicit parameters or poles, not voltage. Pole count is not
@@ -132,7 +134,7 @@ Run the mock checks with `python -m unittest discover -s tests -v`.
 
 ## Revit acceptance checks (disposable project)
 
-1. Close any existing CircuitHub window, reload pyRevit, then click **Custom Tools > Electrical >
+1. Close any existing CircuitHub window, reload pyRevit, then click **ETC PyTools > Electrical >
    Circuit Hub**. Test with IronPython 2.7 on the supported Revit 2023-2025 installations.
 2. Enable **Show empty panels**, highlight one real panel, open **Panels**, and rename it.
    Expand the preview details. Confirm the Panel Name parameter, tree, target details and panel
