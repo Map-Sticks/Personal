@@ -18,6 +18,11 @@ selection = revit.get_selection()
   pyRevit's wrapper does this automatically when `doc.IsModifiable`).
 - Pass `doc=` explicitly in handlers and event callbacks: `revit.Transaction("x", doc=uiapp.ActiveUIDocument.Document)`.
 - Read-only buttons: do not open a transaction; "does not modify the model" must be actually true.
+- pyRevit transaction/group wrappers **dispose their native objects when the `with` block exits**.
+  Do not read `.status` afterward: that calls `GetStatus()` on a disposed object and can raise
+  "The managed object is not valid". For a transaction held open across native picks, follow the
+  guarded `DB.Transaction` session pattern in Draw Switchlines / Detail Line Fillets: inspect
+  the `Commit()` return value before `Dispose()`, and roll back unfinished work in `finally`.
 
 ## Modeless WPF window = the #1 source of "dead buttons"
 

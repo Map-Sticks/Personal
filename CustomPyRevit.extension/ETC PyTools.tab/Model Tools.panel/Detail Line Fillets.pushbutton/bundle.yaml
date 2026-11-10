@@ -1,0 +1,9 @@
+title: Detail Line Fillets
+tooltip: >-
+  Enter a radius in model mm. Click near a corner to fillet it immediately, or
+  pick two adjacent straight detail lines anywhere along them. Rejected picks
+  show status-bar guidance, not popups. Esc clears a pending first line, then
+  offers Finish, Continue or Cancel.
+  All fillets share one transaction and use the first selected line's style.
+author: Map-Sticks
+context: doc-project

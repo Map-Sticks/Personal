@@ -10,6 +10,53 @@ Codespaces, then load and test them in Revit on Windows.
 
 ## Included buttons
 
+`Detail Line Fillets` (**ETC PyTools > Model Tools > Detail Line Fillets**) fillets
+straight detail-line corners in the active view. Enter the radius once in **model
+millimetres**, then either click near a detail-line corner endpoint for a
+**single-click fillet**, or click farther along the first line and then select
+the second adjoining line **anywhere along it**. A pending first line takes
+priority over automatic corner detection on the second click. Both methods trim
+the source lines and draw the tangent arc **immediately in the Revit view**.
+Each arc uses the style of the first line clicked.
+Click more corners to repeat the operation; a line can participate in multiple
+fillets as long as it is not consumed by an earlier trim.
+
+The pending first line is highlighted (selected) until the second pick.
+**Esc** with a first line pending only clears it, like a native tool. **Esc**
+with nothing pending shows native **Finish / Continue / Cancel** controls. Finish
+commits all fillets in one transaction and one Undo step, without an extra
+success popup. Continue resumes picking with the same radius. If nothing has
+been drawn yet, Esc exits the tool. Cancel rolls back every fillet from the run.
+
+Automatic corner detection requires exactly two straight detail lines meeting
+at an endpoint and a click within **4 mm on paper** of that endpoint (scaled by
+the view scale, e.g. 200 mm model at 1:50), capped at a quarter of the picked
+line's length so a mid-line click is always a two-line pick. Native corner-snap
+glyphs are not shown during this pick. A click outside that tolerance starts
+two-line selection instead. If automatic detection is ambiguous or finds no
+usable neighbour, the clicked line becomes the first line and you can choose
+the second explicitly. Rejected picks show their reason in the next native
+status-bar selection prompt, never a popup. An invalid second pick preserves
+the first line so you can retry. Crossings, gaps, line extensions, model lines,
+existing arcs, pinned/grouped lines, excessive radii and sub-tolerance arcs
+are rejected without changing the model for that attempt.
+Primary-owned detail lines can be picked in dependent views. An API/model
+failure rolls back all uncommitted fillets.
+
+**Revit test / shortcut:** reload pyRevit, open a drafting view with two joined
+detail lines, run the button, enter a radius smaller than both lines, and click
+the shared endpoint. Verify the trimmed lines and arc appear immediately in the
+view. Add another corner, press Esc, then choose **Finish**. Check the radius,
+line styles, tangent joins and one-step Undo. Also click midway along two
+adjoining lines to test two-line mode, and make invalid picks between those
+clicks: the first line should remain pending and no popup should interrupt you.
+Test **Continue**, **Cancel**, a too-large radius, explicit selection at an
+ambiguous corner, and a detail line in a dependent view.
+Assign a shortcut in Revit's **Keyboard Shortcuts** (`KS`) by searching for
+**Detail Line Fillets**. Target: Revit 2023–2025, IronPython 2.7,
+pyRevit 4.8.x–6.x. Point picking, API transaction behavior, joins, worksharing
+and shortcut registration require live Revit validation.
+
 `Document Info` is a read-only pushbutton that reports the active document name
 and the number of selected elements in the pyRevit output window.
 
@@ -169,12 +216,12 @@ localStorage (seeded from the classic button's settings file).
 
 ## ETC PyTools toolbar
 
-The 26 implemented commands are placed directly on the ribbon, in this order, under
+The 27 implemented commands are placed directly on the ribbon, in this order, under
 `CustomPyRevit.extension/ETC PyTools.tab`:
 
 - **Electrical:** Place Fixtures; Manual Wall Placement; Find Linked Fixtures; Draw Switchlines;
   Circuit Hub; Tray Coordinator; Parameter Browser; Parameter WebView (pyRevit 7+).
-- **Model Tools:** Focus Select; Align Section Box; Flip Workplane; Color Scheme Editor.
+- **Model Tools:** Focus Select; Align Section Box; Flip Workplane; Color Scheme Editor; Detail Line Fillets.
 - **Family Tools:** Offset Setup; Middle Family Params; Switch Colour Setup.
 - **Spaces:** Space Plans Stage 3.6; Align Elev. Rows.
 - **Views and Sheets:** Legend Builder; Number Viewports; Sheet Origin Align.
@@ -263,7 +310,7 @@ python -m unittest discover -s tests -p test_extension_layout.py -v
 
 In Revit 2023-2025, close any old modeless tool windows and reload pyRevit. Verify the eight
 panels, their button order, readable short labels and distinct icons against the list above.
-All 26 implemented commands should be directly on the ribbon; the two scaffolds and the
+All 27 implemented commands should be directly on the ribbon; the two scaffolds and the
 Modeless Window template should not appear. Some commands may be disabled by their normal
 context rules, **Parameter WebView** requires pyRevit 7 or newer, and Revit may collapse panels
 if the window is too narrow.

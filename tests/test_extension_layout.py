@@ -22,7 +22,8 @@ BUTTONS = {
     ],
     "Family Tools.panel": ["Family Offset Setup", "Middle Family Parameters", "Switch Colour Setup"],
     "Getting Started.panel": ["Document Info", "List Sheets"],
-    "Model Tools.panel": ["Align Section Box", "Color Scheme Editor", "Flip Workplane", "Focus Select"],
+    "Model Tools.panel": ["Align Section Box", "Color Scheme Editor", "Detail Line Fillets",
+                          "Flip Workplane", "Focus Select"],
     "Revisions.panel": ["Apply Revisions", "Custom Revision Setup", "Remove Revisions"],
     "Spaces.panel": ["Align Elevation Rows", "Space Plans Stage 3"],
     "Templates.panel": ["Modeless Window"],
@@ -45,6 +46,7 @@ PANEL_LAYOUTS = {
         ("Align Section Box", "Align\nSection Box"),
         ("Flip Workplane", "Flip\nWorkplane"),
         ("Color Scheme Editor", "Color Scheme\nEditor"),
+        ("Detail Line Fillets", "Detail Line\nFillets"),
     ],
     "Family Tools.panel": [
         ("Family Offset Setup", "Offset\nSetup"),
@@ -187,7 +189,7 @@ class ExtensionLayoutTests(unittest.TestCase):
                     titles.add(title)
 
         all_buttons = {(panel, name) for panel, names in BUTTONS.items() for name in names}
-        self.assertEqual(26, len(visible))
+        self.assertEqual(27, len(visible))
         self.assertEqual(all_buttons - HIDDEN_BUTTONS, visible)
         self.assertTrue(HIDDEN_BUTTONS.isdisjoint(visible))
 
