@@ -25,7 +25,7 @@ BUTTONS = {
     "Model Tools.panel": ["Align Section Box", "Color Scheme Editor", "Detail Line Fillets",
                           "Flip Workplane", "Focus Select"],
     "Revisions.panel": ["Apply Revisions", "Custom Revision Setup", "Remove Revisions"],
-    "Spaces.panel": ["Align Elevation Rows", "Space Plans Stage 3"],
+    "Spaces.panel": ["Align Elevation Rows", "RoomRegions", "Space Plans Stage 3"],
     "Templates.panel": ["Modeless Window"],
     "Views and Sheets.panel": ["Legend Builder", "Normalise Sheet Origins", "Number Viewports"],
 }
@@ -56,6 +56,7 @@ PANEL_LAYOUTS = {
     "Spaces.panel": [
         ("Space Plans Stage 3", "Space Plans\nStage 3.6"),
         ("Align Elevation Rows", "Align\nElev. Rows"),
+        ("RoomRegions", "Room\nRegions"),
     ],
     "Views and Sheets.panel": [
         ("Legend Builder", "Legend\nBuilder"),
@@ -189,7 +190,7 @@ class ExtensionLayoutTests(unittest.TestCase):
                     titles.add(title)
 
         all_buttons = {(panel, name) for panel, names in BUTTONS.items() for name in names}
-        self.assertEqual(27, len(visible))
+        self.assertEqual(28, len(visible))
         self.assertEqual(all_buttons - HIDDEN_BUTTONS, visible)
         self.assertTrue(HIDDEN_BUTTONS.isdisjoint(visible))
 

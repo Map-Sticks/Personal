@@ -10,6 +10,133 @@ Codespaces, then load and test them in Revit on Windows.
 
 ## Included buttons
 
+### Room Regions (Stage 1)
+
+`Room Regions` (**ETC PyTools > Spaces > Room Regions**) creates one view-specific
+filled region per ticked host Space, host Room or linked Room, using one selected
+filled-region type in the active plan. The modeless window has source and link
+choices, search, sortable columns, visible-row All/None/Invert and Shift-click
+range ticking. Highlight several rows and click one of their checkboxes to tick
+or untick all highlighted visible rows; a checkbox outside that selection affects
+only its own row. It remembers its settings with pyRevit's configuration helper.
+Link instances are listed separately, and linked boundaries are transformed
+into the host model. Default filters are the active view's level and phase; linked
+levels match by transformed elevation within 1 mm, and linked phases use Revit's
+host-to-link phase map. Sources with an unreadable or unmapped phase are hidden
+while **Follow view phase** is on. **Show all levels** only changes the list:
+creation still skips sources outside the active view's level.
+
+Stage 1 supports floor, ceiling, area and engineering plans with a generating level;
+other views and templates are blocked. The window shows the project and view from
+the last refresh. After switching either, click **Refresh active view**; a stale
+request is rejected. Re-clicking the ribbon button should activate the existing
+window. **Opening and Refresh read metadata only: no Rooms, Spaces or linked-model
+contents are scanned.** In the **Sources** tab, choose host source categories and/or
+specific link instances, then click **Load selected sources**. Only those sources
+are scanned. New configurations select no links; saved link choices can be
+restored, but never trigger automatic scanning. Changing source/link choices
+requires another explicit load. Refresh clears the list; loading resets ticks.
+**Sources** is a navigation tab, not a creation action; the explicit
+**Create filled regions** button creates one region per ticked visible source.
+
+The boundary options are Finish, Center, Core Boundary and Core Center, with
+optional islands and collinear simplification. Lines and horizontal arcs are
+reconstructed on the view level; other curves are tessellated when possible, and
+unbounded non-cyclic curves are rejected. Short segments and small gaps can be
+repaired, and rejected islands or other smaller loops can be omitted. If Revit
+rejects the full boundary, the tool can fall back to the largest
+outer loop or a tessellated outer loop. These repairs and fallbacks are reported in
+the run log and can change the outline: **inspect warnings and the resulting
+regions rather than assuming exact geometry**.
+
+**Safety and limitations:**
+
+- Confirm before creating. Stage 1 does **not** track, detect, replace or sync
+  existing regions. Running it again can create overlapping duplicates.
+- Explicit source loading and creation show cancellable progress. Cancelling loading
+  keeps the previous list. Cancelling creation keeps
+  completed regions and reports the rest as skipped; Undo removes the completed
+  regions together. A failed region is reported without normally stopping others.
+- As approved for Stage 1, each region has its own transaction inside one
+  assimilated transaction group instead of subtransactions inside a view
+  transaction. This permits commit-time failures to be isolated while retaining
+  one Undo. Revit warnings are logged and cleared; errors roll back the affected
+  transaction. A regeneration or document-corruption failure aborts the run.
+- Failure handling is forced modal. If Revit nevertheless returns `Pending`, the
+  run stops, controls wait for failure handling, and an `ITransactionFinalizer`
+  attempts to roll back the entire group afterward. This documented recovery
+  callback is an exception to ordinary handler-only model work and still needs
+  live Revit testing; any cleanup failure is reported.
+- Click/pick selection, offsets, line-style selection, multiple target views,
+  existing-region policies, combined regions/union, parameter mapping, storage,
+  editing, Shift-click quick add, sync and the full report are deferred to later
+  stages. Masking-region creation is also deferred; opaque filled-region types
+  are not the same thing as masking regions.
+
+**First installation from the button ZIP:** extract its `RoomRegions.pushbutton`
+folder into `CustomPyRevit.extension/ETC PyTools.tab/Spaces.panel/`. The ZIP does
+not replace the panel's sibling `bundle.yaml`; on an older installation, add
+`'RoomRegions[title:Room\nRegions]'` to its existing `layout` list without
+removing the other entries. This repository already includes that entry. Close an
+old Room Regions window and reload pyRevit after updating.
+
+**Revit test:** in a disposable project, reload pyRevit, open a plan with enclosed
+Rooms or Spaces, click **ETC PyTools > Spaces > Room Regions**, and verify the
+empty list appears without a source-scan progress dialog. Choose host sources or
+one link instance, click **Load selected sources**, and choose a filled-region
+type. Highlight several rows; tick and untick one checkbox and verify all
+highlighted rows follow both changes. Also test Shift-range ticking and keyboard
+Space on a focused checkbox. Tick a few visible rows, then click
+**Create filled regions** and confirm. Expect one editable filled region per valid source,
+with counts and any warnings in the status/log. Check the boundaries, use
+**Select created**, and verify a single Undo removes the run. Repeat with a
+rotated/moved linked model, cancellation, a different plan, and a view switch
+before refreshing. Test only in a disposable project until the checks below pass.
+
+**Acceptance status:** the user confirmed that the individual-region creation
+action produced filled regions in live Revit. Geometry cases, the revised loading
+workflow and WPF multi-row checkbox input still need explicit live verification.
+Revit and pyRevit-hosted IronPython checks cannot run in this workspace.
+The originally delivered scripts compiled in an isolated IronPython 2.7.12
+runtime, and cross-runtime tests exercised the pure logic and a real .NET
+`DataView` outside Revit. Those checks and the mock-based Python tests do not
+establish Revit behavior or certification for any release.
+The standalone upstream IronPython 2.7.12 runtime used for this check failed
+to initialize its standard library on the available .NET 9 runtime; the isolated
+test passed on .NET 6. pyRevit uses patched engines, so this is not evidence that
+pyRevit fails, but it does not verify its .NET 8/10-based Revit hosts either.
+
+| Acceptance case | Status |
+| --- | --- |
+| Basic individual filled-region creation | User confirmed in Revit; detailed geometry cases below remain unverified |
+| Metadata-only startup/Refresh, selected-source loading, highlighted-row tick/untick | Offline regressions passed; revised WPF workflow not yet tested in Revit |
+| Rectangular, L-shaped, curved-wall and circular rooms | Stage 1: not run |
+| Column/shaft islands, room-separation lines and tiny segments | Stage 1: not run |
+| Unenclosed, unplaced and redundant rooms | Stage 1: not run |
+| Moved/rotated linked model, same link placed twice, link unloaded mid-session | Stage 1: not run |
+| Space/view phase mismatch, reflected ceiling plan and dependent view | Stage 1: not run |
+| Single Undo, progress cancellation, document/view switching and re-click | Stage 1: not run |
+| Large batch of 300+ rooms and performance | Stage 1: not run; full acceptance in Stage 4 |
+| Multiple views; Replace/Skip/Add another; disjoint rooms and adjacent rooms with Center-boundary union | Deferred: Stage 2 |
+| Click-inside, pick-in-view and Esc during picks | Deferred: Stage 2 |
+| Add/remove a room, manual region, island plus new room, Shift-click quick add | Deferred: Stage 3 |
+| Owned-by-another-user checks when editing or replacing regions | Deferred: Stages 2-3 |
+| Sync after linked-room edits and partial sync | Deferred: Stage 4 |
+
+**API review and remaining verification:** key Stage 1 calls were checked against
+Autodesk's references for [spatial boundaries](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/8e0919af-6172-9d16-26d2-268e42f7e936.htm),
+[link phase mapping](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/4d322c11-c2b3-a096-4f10-3b23c9112308.htm),
+[boundary validation](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/35ee6236-a777-c509-f53a-f169eb5ecee8.htm),
+[filled-region creation](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/ca304caa-7f95-4638-67d9-a138be609b9f.htm),
+[external events](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API/files/Revit_API_Developers_Guide/Advanced_Topics/Revit_API_Revit_API_Developers_Guide_Advanced_Topics_External_Events_html.html)
+and [transaction-group rollback](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/2efcf628-bb40-bf36-a2e4-eaeca4cca461.htm),
+plus pyRevit's window/configuration documentation and older-version source.
+Local Revit API XML files were unavailable here; some 2023/2024 signatures were
+checked against a third-party mirror. A complete official per-member, per-year
+2023-2027 audit has **not** been completed. Validate the installed API XML and
+the button in each target Revit/pyRevit version, including window lifetime,
+document identity, phase mapping, geometry and transaction/finalizer behavior.
+
 `Detail Line Fillets` (**ETC PyTools > Model Tools > Detail Line Fillets**) fillets
 straight detail-line corners in the active view. Enter the radius once in **model
 millimetres**, then either click near a detail-line corner endpoint for a
@@ -216,14 +343,14 @@ localStorage (seeded from the classic button's settings file).
 
 ## ETC PyTools toolbar
 
-The 27 implemented commands are placed directly on the ribbon, in this order, under
+The 28 implemented commands are placed directly on the ribbon, in this order, under
 `CustomPyRevit.extension/ETC PyTools.tab`:
 
 - **Electrical:** Place Fixtures; Manual Wall Placement; Find Linked Fixtures; Draw Switchlines;
   Circuit Hub; Tray Coordinator; Parameter Browser; Parameter WebView (pyRevit 7+).
 - **Model Tools:** Focus Select; Align Section Box; Flip Workplane; Color Scheme Editor; Detail Line Fillets.
 - **Family Tools:** Offset Setup; Middle Family Params; Switch Colour Setup.
-- **Spaces:** Space Plans Stage 3.6; Align Elev. Rows.
+- **Spaces:** Space Plans Stage 3.6; Align Elev. Rows; Room Regions.
 - **Views and Sheets:** Legend Builder; Number Viewports; Sheet Origin Align.
 - **Revisions:** Revision Setup; Apply Revisions; Remove Revisions.
 - **Asset Management:** NWB Asset ID.

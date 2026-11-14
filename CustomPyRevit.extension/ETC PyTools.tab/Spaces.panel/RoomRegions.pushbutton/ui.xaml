@@ -1,0 +1,139 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Room Regions - Stage 1" Width="1400" Height="820"
+        MinWidth="960" MinHeight="620" WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True" Closing="window_closing" Closed="window_closed">
+    <DockPanel Margin="10">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock Text="Room Regions - Stage 1" FontSize="18" FontWeight="SemiBold"/>
+            <TextBlock x:Name="contextText" Text="Reading active project and view..."
+                       TextWrapping="Wrap" Margin="0,3,0,0"/>
+            <TextBlock Text="The project and view are shown as of the last refresh. Refresh after switching either."
+                       TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <Expander Header="Run log" Margin="0,0,0,6">
+                <TextBox x:Name="logText" Height="100" IsReadOnly="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" AcceptsReturn="True"/>
+            </Expander>
+            <TextBlock x:Name="statusText" TextWrapping="Wrap" Margin="0,0,0,6"/>
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="selectCreatedButton" Content="Select created" Click="select_created"
+                            Padding="12,5" Margin="0,0,6,0"
+                            ToolTip="Select the regions created by the last successful run."/>
+                    <Button x:Name="refreshButton" Content="Refresh active view" Click="refresh_clicked"
+                            Padding="12,5" Margin="0,0,6,0"/>
+                    <Button Content="Close" Click="close_clicked" Padding="12,5"/>
+                </StackPanel>
+                <Button x:Name="createButton" Content="Create filled regions"
+                        Click="create_clicked" HorizontalAlignment="Left" Padding="16,5"
+                        ToolTip="Create one region per ticked Room or Space currently visible in the grid."/>
+            </DockPanel>
+        </StackPanel>
+
+        <TabControl x:Name="workArea">
+            <TabItem Header="Sources">
+                <Grid Margin="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MinWidth="400"/>
+                        <ColumnDefinition Width="6"/>
+                        <ColumnDefinition Width="300" MinWidth="230"/>
+                    </Grid.ColumnDefinitions>
+                    <DockPanel Grid.Column="0">
+                        <StackPanel DockPanel.Dock="Top">
+                            <DockPanel Margin="0,0,0,6">
+                                <TextBlock DockPanel.Dock="Left" Text="Search" VerticalAlignment="Center"
+                                           Margin="0,0,8,0"/>
+                                <TextBox x:Name="searchBox" TextChanged="filter_changed"
+                                         MinHeight="26" VerticalContentAlignment="Center"
+                                         ToolTip="All space-separated words must match."/>
+                            </DockPanel>
+                            <DockPanel Margin="0,0,0,6">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Content="All" Click="select_all" Padding="10,3" Margin="0,0,4,0"
+                                            ToolTip="Tick all visible rows."/>
+                                    <Button Content="None" Click="select_none" Padding="10,3" Margin="0,0,4,0"
+                                            ToolTip="Untick all visible rows."/>
+                                    <Button Content="Invert" Click="select_invert" Padding="10,3"
+                                            ToolTip="Invert ticks on visible rows."/>
+                                </StackPanel>
+                                <TextBlock x:Name="countText" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            </DockPanel>
+                            <TextBlock Text="Tick a highlighted row to tick/untick all highlighted rows. Shift-click a checkbox for a visible range. Only visible, ticked rows are created."
+                                       TextWrapping="Wrap" Margin="0,0,0,6"/>
+                        </StackPanel>
+                        <DataGrid x:Name="sourceGrid" AutoGenerateColumns="False"
+                                  CanUserAddRows="False" CanUserDeleteRows="False"
+                                  CanUserSortColumns="True" CanUserReorderColumns="True"
+                                  EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                  ScrollViewer.CanContentScroll="True" SelectionMode="Extended"
+                                  SelectionUnit="FullRow">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="Tick" Width="55" CanUserSort="False">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox HorizontalAlignment="Center"
+                                                      IsChecked="{Binding __checked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      PreviewMouseLeftButtonDown="row_tick_mouse_down"
+                                                      Click="row_tick_clicked"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Number" Binding="{Binding number}" Width="85" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Name" Binding="{Binding name}" Width="*" MinWidth="110" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Level" Binding="{Binding level}" Width="110" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Source" Binding="{Binding source}" Width="150" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Area" Binding="{Binding area}" SortMemberPath="__area_value"
+                                                    Width="95" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Status" Binding="{Binding status}" Width="100" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Assigned Type" Binding="{Binding __type}"
+                                                    Width="150" IsReadOnly="True"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                    <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                                  ResizeBehavior="PreviousAndNext"/>
+                    <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="settingsPanel" Margin="8,0,0,0">
+                            <TextBlock Text="Sources" FontWeight="SemiBold"/>
+                            <CheckBox x:Name="spacesCheck" Content="Host Spaces" Margin="0,5,0,0"
+                                      Checked="scope_changed" Unchecked="scope_changed"/>
+                            <CheckBox x:Name="roomsCheck" Content="Host Rooms" Margin="0,4,0,0"
+                                      Checked="scope_changed" Unchecked="scope_changed"/>
+                            <CheckBox x:Name="linksCheck" Content="Linked Rooms" Margin="0,4,0,0"
+                                      Checked="scope_changed" Unchecked="scope_changed"/>
+                            <TextBlock Text="Link instances (choose explicitly)" Margin="0,8,0,3"/>
+                            <ListBox x:Name="linkList" Height="90" SelectionMode="Extended"
+                                     SelectionChanged="scope_changed"
+                                     ToolTip="Each placed link instance is listed separately."/>
+                            <Button x:Name="loadSourcesButton" Content="Load selected sources"
+                                    Click="load_sources_clicked" Padding="10,5" Margin="0,8,0,0"/>
+                            <TextBlock Text="No rooms or Spaces are scanned on opening or Refresh. Choose sources and link instances, then load. Changing these choices requires loading again."
+                                       TextWrapping="Wrap" Margin="0,5,0,0"/>
+                            <TextBlock Text="Filters" FontWeight="SemiBold" Margin="0,12,0,0"/>
+                            <CheckBox x:Name="allLevelsCheck" Content="Show all levels" Margin="0,5,0,0"
+                                      Checked="filter_changed" Unchecked="filter_changed"
+                                      ToolTip="This changes the list only. Creation still requires the active view's level."/>
+                            <CheckBox x:Name="phaseCheck" Content="Follow view phase" Margin="0,4,0,0"
+                                      Checked="filter_changed" Unchecked="filter_changed"/>
+                            <TextBlock Text="Filled region type" FontWeight="SemiBold" Margin="0,12,0,3"/>
+                            <ComboBox x:Name="typeBox" SelectionChanged="type_changed"/>
+                            <TextBlock Text="Boundary location" FontWeight="SemiBold" Margin="0,12,0,3"/>
+                            <ComboBox x:Name="boundaryBox"/>
+                            <CheckBox x:Name="islandsCheck" Content="Include islands" Margin="0,8,0,0"/>
+                            <CheckBox x:Name="simplifyCheck" Content="Simplify collinear segments" Margin="0,4,0,0"/>
+                            <TextBlock Margin="0,12,0,0" TextWrapping="Wrap"
+                                       Text="Stage 1 always creates new regions. Existing regions are not tracked or replaced; repeated runs can overlap."/>
+                            <TextBlock Margin="0,8,0,0" TextWrapping="Wrap"
+                                       Text="Picking, offsets, multiple views, combined regions, editing and sync are deferred to later stages."/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>
