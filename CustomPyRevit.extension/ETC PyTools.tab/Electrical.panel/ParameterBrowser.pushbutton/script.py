@@ -13,6 +13,7 @@ __persistentengine__ = True
 
 import os
 import json
+import time
 import traceback
 from functools import wraps
 
@@ -40,6 +41,7 @@ SOURCE_CATEGORIES = {
     "Spaces": DB.BuiltInCategory.OST_MEPSpaces,
     "Rooms": DB.BuiltInCategory.OST_Rooms,
 }
+CONTENT_BOUNDS_PADDING = 1.0  # Revit internal feet; include nearby hosted devices.
 SETTINGS_FILE = os.path.join(
     os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming"),
     "pyRevit", "ParameterBrowser.settings.json")
@@ -72,6 +74,17 @@ def save_settings(data):
 
 def as_eid(value):
     return DB.ElementId(Int64(value) if USE_64_BIT_IDS else Int32(value))
+
+
+def read_levels(doc):
+    level_ids = {}
+    names = []
+    for level in DB.FilteredElementCollector(doc).OfClass(DB.Level).ToElements():
+        name = logic.to_text(level.Name)
+        if name:
+            level_ids[name] = level.Id
+            names.append(name)
+    return level_ids, sorted(set(names), key=lambda x: x.lower())
 
 
 def ui_handler(func):
@@ -109,22 +122,45 @@ def read_values(doc, element, rec, fields):
         rec["values"][field] = value
 
 
-def read_source(doc, category, view_id, wanted_fields):
-    """Return (records, sorted parameter names) for one category as plain Python data."""
-    elements = list(DB.FilteredElementCollector(doc).OfCategory(category)
-                    .WhereElementIsNotElementType().ToElements())
+def collect_source_elements(doc, category, scope="Whole project", view_id=None, level_id=None):
+    collector = DB.FilteredElementCollector(doc)
+    if scope == "Current view":
+        if view_id is None:
+            raise UserError("There is no active view to scan.")
+        try:
+            collector = DB.FilteredElementCollector(doc, view_id)
+        except Exception as ex:
+            raise UserError("The active view cannot be scanned: {}".format(ex))
+    collector = collector.OfCategory(category).WhereElementIsNotElementType()
+    if scope == "Level":
+        if level_id is None:
+            raise UserError("Select a level before refreshing selected.")
+        collector = collector.WherePasses(DB.ElementLevelFilter(level_id))
+    try:
+        return list(collector.ToElements())
+    except Exception as ex:
+        if scope == "Current view":
+            raise UserError("The active view cannot be scanned: {}".format(ex))
+        raise
+
+
+def read_source(doc, category, wanted_fields, scope="Whole project", view_id=None, level_id=None):
+    """Return records, parameter names, and the spatial elements read for one scope."""
+    elements = collect_source_elements(doc, category, scope, view_id, level_id)
     visible = set()
-    if view_id is not None:
+    if scope == "Current view":
+        visible = set([logic.element_id_value(e.Id) for e in elements])
+    elif view_id is not None:
         try:
             for e in (DB.FilteredElementCollector(doc, view_id).OfCategory(category)
                       .WhereElementIsNotElementType().ToElementIds()):
                 visible.add(logic.element_id_value(e))
         except Exception:
-            # Sheets, schedules and other non-graphical views cannot be filtered by view.
+            # Non-graphical views do not expose view-scoped element collection.
             pass
 
     names = set(logic.PSEUDO_FIELDS)
-    for e in elements:
+    for e in elements[:20]:
         for p in e.Parameters:
             try:
                 if p.Definition is not None and p.Definition.Name:
@@ -149,7 +185,7 @@ def read_source(doc, category, view_id, wanted_fields):
                "category": category_name, "label": spatial_label(e, eid), "values": {}, "counts": {}}
         read_values(doc, e, rec, fields)
         records.append(rec)
-    return records, names
+    return records, names, elements
 
 
 def spatial_label(element, eid):
@@ -165,11 +201,10 @@ def spatial_label(element, eid):
     return u" ".join([x for x in (number, name) if x]) or u"Id {}".format(eid)
 
 
-def spatial_phases(doc, category):
-    """Phases that the project's Spaces/Rooms of this category are placed in, latest phase first."""
+def spatial_phases(doc, elements):
+    """Phases that the supplied Spaces/Rooms are placed in, latest phase first."""
     found = {}
-    for e in (DB.FilteredElementCollector(doc).OfCategory(category)
-              .WhereElementIsNotElementType().ToElements()):
+    for e in elements:
         phase_id = None
         try:
             param = e.get_Parameter(DB.BuiltInParameter.ROOM_PHASE)
@@ -233,44 +268,139 @@ class SpatialLookup(object):
         return text
 
 
+def content_category_map():
+    category_labels = {}
+    category_ids = List[DB.BuiltInCategory]()
+    for label, bic_name in logic.CONTENT_CATEGORIES:
+        bic = getattr(DB.BuiltInCategory, bic_name, None)
+        if bic is not None:
+            category_ids.Add(bic)
+            category_labels[bic] = label
+    return category_ids, category_labels
+
+
 def read_contents(doc, space_lookup, room_lookup):
     """Family instances of CONTENT_CATEGORIES with the Space/Room each one is in."""
     items = []
     level_names = {}
-    for label, bic_name in logic.CONTENT_CATEGORIES:
-        bic = getattr(DB.BuiltInCategory, bic_name, None)
-        if bic is None:
+    category_ids, category_labels = content_category_map()
+    if not category_ids.Count:
+        return items
+    elements = (DB.FilteredElementCollector(doc).WherePasses(
+        DB.ElementMulticategoryFilter(category_ids)).WhereElementIsNotElementType().ToElements())
+    for e in elements:
+        if not isinstance(e, DB.FamilyInstance):
             continue
         try:
-            elements = (DB.FilteredElementCollector(doc).OfCategory(bic)
-                        .WhereElementIsNotElementType().ToElements())
+            label = category_labels[e.Category.BuiltInCategory]
         except Exception:
             continue
-        for e in elements:
-            if not isinstance(e, DB.FamilyInstance):
-                continue
-            level_key = logic.element_id_value(e.LevelId)
-            if level_key not in level_names:
-                level_names[level_key] = logic.to_text(element_name(doc, e.LevelId) or u"")
-            try:
-                family = logic.to_text(e.Symbol.FamilyName)
-            except Exception:
-                family = u""
-            try:
-                mark = logic.format_parameter_value(e.get_Parameter(DB.BuiltInParameter.ALL_MODEL_MARK))
-            except Exception:
-                mark = u""
-            items.append({
-                "id": logic.element_id_value(e.Id),
-                "category": label,
-                "family": family,
-                "type": logic.to_text(e.Name),
-                "mark": mark,
-                "level": level_names[level_key],
-                "space": space_lookup.lookup(e),
-                "room": room_lookup.lookup(e),
-            })
+        level_key = logic.element_id_value(e.LevelId)
+        if level_key not in level_names:
+            level_names[level_key] = logic.to_text(element_name(doc, e.LevelId) or u"")
+        item = content_item(doc, e, label, level_names[level_key])
+        item["space"] = space_lookup.lookup(e)
+        item["room"] = room_lookup.lookup(e)
+        items.append(item)
     return items
+
+
+def content_item(doc, element, label, level=None):
+    if level is None:
+        level = logic.to_text(element_name(doc, element.LevelId) or u"")
+    try:
+        family = logic.to_text(element.Symbol.FamilyName)
+    except Exception:
+        family = u""
+    try:
+        mark = logic.format_parameter_value(element.get_Parameter(DB.BuiltInParameter.ALL_MODEL_MARK))
+    except Exception:
+        mark = u""
+    return {
+        "id": logic.element_id_value(element.Id),
+        "category": label,
+        "family": family,
+        "type": logic.to_text(element.Name),
+        "mark": mark,
+        "level": level,
+        "space": None,
+        "room": None,
+    }
+
+
+def all_project_phases(doc):
+    phases = list(doc.Phases)
+    phases.reverse()
+    return phases
+
+
+def read_scoped_contents(doc, source, spatial_elements, lookup, previous_index, affected_ids):
+    """Recheck only content near refreshed spaces plus items previously assigned to them."""
+    key = "space" if source == "Spaces" else "room"
+    cached_by_id = {}
+    candidates = {}
+    for indexed_items in previous_index.values():
+        for item in indexed_items:
+            if item.get(key) in affected_ids:
+                cached_by_id[item["id"]] = item
+                element = doc.GetElement(as_eid(item["id"]))
+                if element is not None and isinstance(element, DB.FamilyInstance):
+                    candidates[item["id"]] = element
+
+    bounds = []
+    box_errors = []
+    for element in spatial_elements:
+        try:
+            box = element.get_BoundingBox(None)
+            if box is not None:
+                for x in (box.Min.X, box.Max.X):
+                    for y in (box.Min.Y, box.Max.Y):
+                        for z in (box.Min.Z, box.Max.Z):
+                            point = box.Transform.OfPoint(DB.XYZ(x, y, z))
+                            bounds.append((point.X, point.Y, point.Z))
+        except Exception as ex:
+            box_errors.append(logic.to_text(ex))
+
+    if box_errors:
+        raise UserError("Could not read {} space/room bounding box(es): {}"
+                        .format(len(box_errors), box_errors[0]))
+    if spatial_elements and not bounds:
+        raise UserError("Could not read bounding boxes for the selected spaces/rooms. Use Refresh All.")
+
+    category_ids, category_labels = content_category_map()
+
+    if bounds and category_ids.Count:
+        min_x = min([point[0] for point in bounds]) - CONTENT_BOUNDS_PADDING
+        min_y = min([point[1] for point in bounds]) - CONTENT_BOUNDS_PADDING
+        min_z = min([point[2] for point in bounds]) - CONTENT_BOUNDS_PADDING
+        max_x = max([point[0] for point in bounds]) + CONTENT_BOUNDS_PADDING
+        max_y = max([point[1] for point in bounds]) + CONTENT_BOUNDS_PADDING
+        max_z = max([point[2] for point in bounds]) + CONTENT_BOUNDS_PADDING
+        outline = DB.Outline(DB.XYZ(min_x, min_y, min_z), DB.XYZ(max_x, max_y, max_z))
+        category_filter = DB.ElementMulticategoryFilter(category_ids)
+        bounds_filter = DB.BoundingBoxIntersectsFilter(outline)
+        elements = (DB.FilteredElementCollector(doc).WherePasses(category_filter)
+                    .WherePasses(bounds_filter).WhereElementIsNotElementType().ToElements())
+        for element in elements:
+            if isinstance(element, DB.FamilyInstance):
+                try:
+                    label = category_labels[element.Category.BuiltInCategory]
+                except Exception:
+                    continue
+                candidates[logic.element_id_value(element.Id)] = element
+
+    refreshed = []
+    for eid, element in candidates.items():
+        previous = cached_by_id.get(eid)
+        item = dict(previous) if previous is not None else content_item(doc, element, u"")
+        if previous is None:
+            try:
+                item["category"] = category_labels[element.Category.BuiltInCategory]
+            except Exception:
+                continue
+        item[key] = lookup.lookup(element)
+        refreshed.append(item)
+    return refreshed, set(candidates.keys())
 
 
 class BrowserEventHandler(UI.IExternalEventHandler):
@@ -297,14 +427,22 @@ class ParameterBrowser(forms.WPFWindow):
         # Must be created while the command still has a valid API context.
         self.ext_event = UI.ExternalEvent.Create(self.handler)
 
-        self.doc = None
-        self.doc_title = u""
-        self.view_name = u""
+        self.doc = doc
+        self.doc_title = logic.to_text(doc.Title)
+        view = uidoc.ActiveView
+        self.view_name = logic.to_text(view.Name) if view is not None else u""
+        self.view_id = view.Id if view is not None else None
+        self.level_ids, self.level_names = read_levels(doc)
         self.records = {}
         self.param_names = {}
         self.pending_fields = set()
         self.table = None
-        self.contents = {}
+        self.contents = {"Spaces": {}, "Rooms": {}}
+        self.unassigned_contents = {"Spaces": [], "Rooms": []}
+        self.unassigned_scanned = False
+        self.unassigned_stale = False
+        self.unassigned_scanned_at = None
+        self.content_count = 0
         self.contents_ids = []
         self.phase_notes = {}
         settings = load_settings()
@@ -320,9 +458,9 @@ class ParameterBrowser(forms.WPFWindow):
         self.cmbScope.SelectedItem = scope
         self.Closed += self.on_closed
 
-        self.capture_model(doc, uidoc)
         self.initialising = False
         self.populate_levels()
+        self.set_status("Choose a scope and click Refresh Selected, or click Refresh All.")
         self.rebuild_view()
 
     # --- state helpers ----------------------------------------------------------------------
@@ -374,14 +512,14 @@ class ParameterBrowser(forms.WPFWindow):
 
     def cached_doc(self):
         if self.doc is None or not self.doc.IsValidObject:
-            raise UserError("The project this list was read from is closed. Click Refresh Model.")
+            raise UserError("The project this list was read from is closed. Click Refresh All.")
         return self.doc
 
     def active_uidoc(self, uiapp):
         doc = self.cached_doc()
         uidoc = uiapp.ActiveUIDocument
         if uidoc is None or not doc.Equals(uidoc.Document):
-            raise UserError("Switch back to '{}' or click Refresh Model to load the active project."
+            raise UserError("Switch back to '{}' or click Refresh All to load the active project."
                             .format(self.doc_title))
         return uidoc
 
@@ -389,32 +527,128 @@ class ParameterBrowser(forms.WPFWindow):
     def capture_model(self, doc, uidoc):
         view = uidoc.ActiveView
         view_id = view.Id if view is not None else None
+        source_data = {}
+        source_elements = {}
+        for source, category in SOURCE_CATEGORIES.items():
+            records, names, elements = read_source(
+                doc, category, self.fields, view_id=view_id)
+            source_data[source] = (records, names)
+            source_elements[source] = elements
         lookups = {
-            "Spaces": SpatialLookup("get_Space", spatial_phases(doc, SOURCE_CATEGORIES["Spaces"])),
-            "Rooms": SpatialLookup("get_Room", spatial_phases(doc, SOURCE_CATEGORIES["Rooms"])),
+            "Spaces": SpatialLookup("get_Space", spatial_phases(doc, source_elements["Spaces"])),
+            "Rooms": SpatialLookup("get_Room", spatial_phases(doc, source_elements["Rooms"])),
         }
         items = read_contents(doc, lookups["Spaces"], lookups["Rooms"])
+        self.content_count = len(items)
         self.phase_notes = dict((k, v.summary(k.lower())) for k, v in lookups.items())
-        for source, category in SOURCE_CATEGORIES.items():
-            records, names = read_source(doc, category, view_id, self.fields)
+        for source in logic.SOURCES:
+            records, names = source_data[source]
             index = logic.index_contents(items, "space" if source == "Spaces" else "room")
             for rec in records:
                 rec["counts"] = logic.category_counts(index.get(rec["id"], []))
             self.records[source] = records
             self.param_names[source] = sorted(names + logic.count_fields(), key=lambda x: x.lower())
             self.contents[source] = index
+            self.unassigned_contents[source] = list(index.get(None, []))
+        self.unassigned_scanned = True
+        self.unassigned_stale = False
+        self.unassigned_scanned_at = time.strftime("%Y-%m-%d %H:%M")
         self.doc = doc
         self.doc_title = logic.to_text(doc.Title)
         self.view_name = logic.to_text(view.Name) if view is not None else u""
+        self.view_id = view.Id if view is not None else None
+        self.level_ids, self.level_names = read_levels(doc)
         self.pending_fields = set()
 
     def refresh_from_revit(self, uiapp):
         uidoc = uiapp.ActiveUIDocument
         if uidoc is None or uidoc.Document.IsFamilyDocument:
-            raise UserError("Open a project (not a family) and click Refresh Model again.")
+            raise UserError("Open a project (not a family) and click Refresh All again.")
+        started = time.time()
         self.capture_model(uidoc.Document, uidoc)
         self.populate_levels()
         self.rebuild_view()
+        total = sum([len(self.records.get(source, [])) for source in logic.SOURCES])
+        self.set_status("Refresh All read {} spaces/rooms and {} content elements in {:.1f}s."
+                        .format(total, self.content_count, time.time() - started))
+
+    def refresh_selected_from_revit(self, uiapp):
+        uidoc = self.active_uidoc(uiapp)
+        doc = uidoc.Document
+        source = self.current_source()
+        scope = self.current_scope()
+        level_name = self.current_level()
+        level_id = self.level_ids.get(level_name) if scope == "Level" else None
+        started = time.time()
+        view = uidoc.ActiveView
+        view_id = view.Id if view is not None else None
+        records, names, elements = read_source(
+            doc, SOURCE_CATEGORIES[source], self.fields, scope, view_id, level_id)
+
+        old_records = self.records.get(source, [])
+        if scope == "Level":
+            affected_ids = set([rec["id"] for rec in old_records if rec.get("level") == level_name])
+        elif scope == "Current view":
+            affected_ids = set([rec["id"] for rec in old_records if rec.get("visible")])
+        else:
+            affected_ids = set([rec["id"] for rec in old_records])
+
+        lookup = SpatialLookup("get_Space" if source == "Spaces" else "get_Room",
+                               all_project_phases(doc))
+        refreshed_items, candidate_ids = read_scoped_contents(
+            doc, source, elements, lookup, self.contents.get(source, {}), affected_ids)
+        self.phase_notes[source] = lookup.summary(source.lower())
+
+        self.records[source] = logic.merge_scoped_records(old_records, records, scope, level_name)
+        key = "space" if source == "Spaces" else "room"
+        index = {}
+        for indexed_items in self.contents.get(source, {}).values():
+            for item in indexed_items:
+                if item.get(key) not in affected_ids and item["id"] not in candidate_ids:
+                    index.setdefault(item.get(key), []).append(item)
+        for item in refreshed_items:
+            if item.get(key) is not None:
+                index.setdefault(item[key], []).append(item)
+        self.contents[source] = index
+        for rec in self.records[source]:
+            rec["counts"] = logic.category_counts(index.get(rec["id"], []))
+        if self.unassigned_scanned:
+            self.unassigned_stale = True
+
+        self.param_names[source] = sorted(
+            set(self.param_names.get(source, []) + names + logic.count_fields()),
+            key=lambda x: x.lower())
+        self.view_name = logic.to_text(view.Name) if view is not None else u""
+        self.view_id = view_id
+        self.populate_levels()
+        self.rebuild_view()
+        self.set_status("Refresh Selected read {} {} and checked {} nearby elements in {:.1f}s. "
+                        "Unassigned results are unchanged; use Scan Unassigned to update them."
+                        .format(len(records), source.lower(), len(candidate_ids), time.time() - started))
+
+    def scan_unassigned_from_revit(self, uiapp):
+        uidoc = self.active_uidoc(uiapp)
+        doc = uidoc.Document
+        started = time.time()
+        source_elements = {}
+        lookups = {}
+        for source, category in SOURCE_CATEGORIES.items():
+            source_elements[source] = collect_source_elements(doc, category)
+            lookups[source] = SpatialLookup(
+                "get_Space" if source == "Spaces" else "get_Room",
+                spatial_phases(doc, source_elements[source]))
+        items = read_contents(doc, lookups["Spaces"], lookups["Rooms"])
+        self.content_count = len(items)
+        for source in logic.SOURCES:
+            key = "space" if source == "Spaces" else "room"
+            self.unassigned_contents[source] = list(logic.index_contents(items, key).get(None, []))
+            self.phase_notes[source] = lookups[source].summary(source.lower())
+        self.unassigned_scanned = True
+        self.unassigned_stale = False
+        self.unassigned_scanned_at = time.strftime("%Y-%m-%d %H:%M")
+        self.update_contents()
+        self.set_status("Scan Unassigned checked {} content elements in {:.1f}s."
+                        .format(len(items), time.time() - started))
 
     def load_fields_from_revit(self, uiapp, source, fields):
         try:
@@ -434,7 +668,7 @@ class ParameterBrowser(forms.WPFWindow):
             if element is not None:
                 ids.Add(element.Id)
         if ids.Count == 0:
-            raise UserError("Those elements no longer exist in the model. Click Refresh Model.")
+            raise UserError("Those elements no longer exist in the model. Click Refresh Selected or Refresh All.")
         uidoc.Selection.SetElementIds(ids)
         if show:
             try:
@@ -451,12 +685,11 @@ class ParameterBrowser(forms.WPFWindow):
         self.initialising = True
         try:
             self.cmbLevel.Items.Clear()
-            levels = logic.level_options(self.records.get(self.current_source(), []))
-            for name in levels:
+            for name in self.level_names:
                 self.cmbLevel.Items.Add(name)
-            if old in levels:
+            if old in self.level_names:
                 self.cmbLevel.SelectedItem = old
-            elif levels:
+            elif self.level_names:
                 self.cmbLevel.SelectedIndex = 0
         finally:
             self.initialising = was_initialising
@@ -520,14 +753,17 @@ class ParameterBrowser(forms.WPFWindow):
         self.apply_search()
         self.update_contents()
 
-        scope = self.current_scope()
-        if scope == "Current view":
-            scope = u"view '{}' (as of last refresh)".format(self.view_name)
-        elif scope == "Level":
-            scope = u"level '{}'".format(self.current_level() or u"-")
+        if source not in self.records:
+            self.set_status("Choose a scope and click Refresh Selected, or click Refresh All.")
         else:
-            scope = u"whole project"
-        self.set_status(u"{} {} in {} - {}".format(len(records), source.lower(), scope, self.doc_title))
+            scope = self.current_scope()
+            if scope == "Current view":
+                scope = u"view '{}' (as of last refresh)".format(self.view_name)
+            elif scope == "Level":
+                scope = u"level '{}'".format(self.current_level() or u"-")
+            else:
+                scope = u"whole project"
+            self.set_status(u"{} {} in {} - {}".format(len(records), source.lower(), scope, self.doc_title))
         self.persist_settings()
 
     def apply_search(self):
@@ -564,8 +800,15 @@ class ParameterBrowser(forms.WPFWindow):
         index = self.contents.get(source, {})
         noun = self.singular()
         if self.chkUnassigned.IsChecked:
-            items = index.get(None, [])
-            header = u"Not in any {} - {} element(s)".format(noun, len(items))
+            items = self.unassigned_contents.get(source, [])
+            if self.unassigned_scanned:
+                scanned_at = self.unassigned_scanned_at or u"unknown time"
+                state = (u"; last scan {} (stale after scoped refresh)".format(scanned_at)
+                         if self.unassigned_stale else u"; whole-project scan {}".format(scanned_at))
+                header = u"Not in any {} - {} element(s){}".format(
+                    noun, len(items), state)
+            else:
+                header = u"Unassigned results have not been scanned. Click Scan Unassigned."
         else:
             ids = self.selected_element_ids()
             items = []
@@ -583,6 +826,8 @@ class ParameterBrowser(forms.WPFWindow):
         if len(self.contents_ids) != len(items):
             header += u" ({} hidden by Categories)".format(len(items) - len(self.contents_ids))
         note = self.phase_notes.get(source)
+        if self.chkUnassigned.IsChecked and not self.unassigned_scanned:
+            note = None
         self.lblContents.Text = header + (u"\n" + note if note else u"")
 
         self.treeContents.Items.Clear()
@@ -695,9 +940,21 @@ class ParameterBrowser(forms.WPFWindow):
         self.rebuild_view()
 
     @ui_handler
-    def refresh_clicked(self, sender, args):
-        if self.run_in_revit("Refresh model", self.refresh_from_revit):
-            self.set_status("Reading the model...")
+    def refresh_selected_clicked(self, sender, args):
+        if self.run_in_revit("Refresh selected", self.refresh_selected_from_revit):
+            scope = self.current_scope()
+            label = self.current_level() if scope == "Level" else scope.lower()
+            self.set_status("Reading {} {}...".format(label or "selected", self.current_source().lower()))
+
+    @ui_handler
+    def refresh_all_clicked(self, sender, args):
+        if self.run_in_revit("Refresh all", self.refresh_from_revit):
+            self.set_status("Reading the whole model...")
+
+    @ui_handler
+    def scan_unassigned_clicked(self, sender, args):
+        if self.run_in_revit("Scan unassigned", self.scan_unassigned_from_revit):
+            self.set_status("Scanning unassigned elements across the whole model...")
 
     @ui_handler
     def select_clicked(self, sender, args):

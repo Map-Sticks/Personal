@@ -13,8 +13,10 @@
                 <ComboBox x:Name="cmbLevel" Width="180" SelectionChanged="level_changed" Margin="0,0,14,0"/>
                 <Button Content="Columns..." Click="choose_columns" Padding="12,4" Margin="0,0,6,0"
                         ToolTip="Choose which parameters and 'Count:' columns are shown"/>
-                <Button Content="Refresh Model" Click="refresh_clicked" Padding="12,4"
-                        ToolTip="Re-read Spaces/Rooms and their elements from the active project and view"/>
+                <Button Content="Refresh Selected" Click="refresh_selected_clicked" Padding="12,4"
+                        ToolTip="Refresh only the selected source and scope (level, current view, or whole project)"/>
+                <Button Content="Refresh All" Click="refresh_all_clicked" Padding="12,4" Margin="6,0,0,0"
+                        ToolTip="Re-read all Spaces, Rooms, and their elements across the whole project"/>
             </WrapPanel>
             <DockPanel Margin="0,0,0,8">
                 <Button DockPanel.Dock="Right" Content="Clear" Click="clear_clicked" Padding="12,4" Margin="6,0,0,0"/>
@@ -55,8 +57,14 @@
                                 ToolTip="Choose which categories are listed in this panel"/>
                         <TextBlock Text="Elements in selection" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     </DockPanel>
-                    <CheckBox x:Name="chkUnassigned" Content="Show elements not in any Space/Room" Margin="0,6,0,0"
-                              Checked="unassigned_toggled" Unchecked="unassigned_toggled"/>
+                    <DockPanel Margin="0,6,0,0">
+                        <Button DockPanel.Dock="Right" Content="Scan Unassigned" Click="scan_unassigned_clicked"
+                                Padding="8,3" Margin="8,0,0,0"
+                                ToolTip="Scan all content elements in the whole project for unassigned results"/>
+                        <CheckBox x:Name="chkUnassigned" Content="Show elements not in any Space/Room"
+                                  VerticalAlignment="Center"
+                                  Checked="unassigned_toggled" Unchecked="unassigned_toggled"/>
+                    </DockPanel>
                     <TextBlock x:Name="lblContents" TextWrapping="Wrap" Foreground="#555555" Margin="0,6,0,0"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">

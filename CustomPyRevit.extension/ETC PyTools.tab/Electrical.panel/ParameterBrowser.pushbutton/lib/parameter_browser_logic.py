@@ -95,6 +95,27 @@ def filter_records(records, scope, level=None):
     return list(records)
 
 
+def merge_scoped_records(existing, refreshed, scope, level=None):
+    """Replace only the cached records covered by a scoped refresh."""
+    if scope == "Whole project":
+        return list(refreshed)
+    if scope == "Level":
+        kept = [rec for rec in existing if rec.get("level") != level]
+    elif scope == "Current view":
+        kept = [rec for rec in existing if not rec.get("visible")]
+    else:
+        kept = list(existing)
+
+    positions = dict((rec["id"], i) for i, rec in enumerate(kept))
+    for rec in refreshed:
+        if rec["id"] in positions:
+            kept[positions[rec["id"]]] = rec
+        else:
+            positions[rec["id"]] = len(kept)
+            kept.append(rec)
+    return kept
+
+
 def count_field(category):
     return COUNT_PREFIX + category
 
