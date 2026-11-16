@@ -922,7 +922,7 @@ class CableTrayCoordinator(forms.WPFWindow):
     def __init__(self, doc):
         self.initialising = True
         self.closed = False
-        forms.WPFWindow.__init__(self, XAML_PATH)
+        forms.WPFWindow.__init__(self, XAML_PATH, handle_esc=False)
         self.queue = logic.ActionQueue()
         self.handler = CoordinatorEventHandler(self)
         # Must be created while the command still has a valid API context.

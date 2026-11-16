@@ -18,7 +18,8 @@ Before writing or changing any button, read:
 - Any model change is inside a transaction (`with revit.Transaction("name"):`). Read-only tools never open one.
 - **Modeless windows**: start from `ETC PyTools.tab/Templates.panel/Modeless Window.pushbutton`. Always set
   `__persistentengine__ = True`, always do model work in an `IExternalEventHandler.Execute` via `ExternalEvent.Raise()`,
-  create the event in `__init__`, never call the Revit API from click handlers directly.
+  create the event in `__init__`, never call the Revit API from click handlers directly. Esc must never close a
+  modeless window: pass `handle_esc=False` to `forms.WPFWindow.__init__` and never use `IsCancel="True"` in its XAML.
 - Prefer pyRevit built-ins (`forms.alert`, `forms.SelectFromList`, ...) over custom XAML when they are enough.
 - New button = new `<Name>.pushbutton` folder with `script.py`, `bundle.yaml`, and a unique purpose-made `icon.png`
   (+ `window.xaml` if needed). Never reuse a generic icon from another button. Update the README button list.

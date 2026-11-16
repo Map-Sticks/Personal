@@ -76,7 +76,7 @@ class RoomRegionsWindow(forms.WPFWindow):
         self.created_token = None
         self.startup_warnings = []
         self.config = script.get_config()
-        forms.WPFWindow.__init__(self, XAML_PATH)
+        forms.WPFWindow.__init__(self, XAML_PATH, handle_esc=False)
         self.queue = logic.ActionQueue()
         self.handler = RoomRegionsEventHandler(self)
         self.ext_event = UI.ExternalEvent.Create(self.handler)

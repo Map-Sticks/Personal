@@ -509,7 +509,7 @@ def rev(fn,pl): pl._request(fn)
 
 class Win(forms.WPFWindow):
     def __init__(self):
-        forms.WPFWindow.__init__(self,script.get_bundle_file("ui.xaml"))
+        forms.WPFWindow.__init__(self, script.get_bundle_file("ui.xaml"), handle_esc=False)
         self.S=defs()
         self._settings_token=None;self._saved_settings=None
         self._settings_source="Waiting for RVT settings"

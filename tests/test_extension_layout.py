@@ -266,6 +266,26 @@ class ExtensionLayoutTests(unittest.TestCase):
     def test_no_old_tab_commands_remain(self):
         self.assertEqual([], list(LEGACY_TAB.rglob("*.pushbutton/script.py")))
 
+    def test_modeless_windows_do_not_close_on_escape(self):
+        """pyRevit's WPFWindow closes on Esc unless handle_esc=False; IsCancel buttons also fire on Esc."""
+        modeless = [path for path in EXTENSION.rglob("*.py")
+                    if re.search(r"^__persistentengine__\s*=\s*True", path.read_text(encoding="utf-8"), re.M)]
+        windows = 0
+        for path in modeless:
+            source = path.read_text(encoding="utf-8")
+            for match in re.finditer(r"WPFWindow\.__init__\(", source):
+                depth, end = 1, match.end()
+                while depth:
+                    depth += {"(": 1, ")": -1}.get(source[end], 0)
+                    end += 1
+                windows += 1
+                with self.subTest(script=str(path)):
+                    self.assertRegex(source[match.end():end], r"\bhandle_esc\s*=\s*False\b")
+            for xaml in path.parent.glob("*.xaml"):
+                with self.subTest(xaml=str(xaml)):
+                    self.assertNotRegex(xaml.read_text(encoding="utf-8-sig"), r'IsCancel\s*=\s*"True"')
+        self.assertGreaterEqual(windows, 8)
+
 
 if __name__ == "__main__":
     unittest.main()

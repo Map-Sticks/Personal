@@ -8,6 +8,8 @@ Pattern (copy this for every modeless tool):
     must go through ExternalEvent + IExternalEventHandler.
   * Transactions are opened inside the handler's Execute(), never in the
     window's click handlers.
+  * Esc must not close the window: pass handle_esc=False to
+    forms.WPFWindow.__init__ and never mark a XAML button IsCancel="True".
 
 IronPython 2.7 compatible (no f-strings, no type hints).
 """
@@ -45,7 +47,7 @@ class ApiActionHandler(UI.IExternalEventHandler):
 
 class ModelessWindow(forms.WPFWindow):
     def __init__(self):
-        forms.WPFWindow.__init__(self, XAML_PATH)
+        forms.WPFWindow.__init__(self, XAML_PATH, handle_esc=False)
         self.handler = ApiActionHandler()
         # Must be created here, while a valid API context exists.
         self.ext_event = UI.ExternalEvent.Create(self.handler)
