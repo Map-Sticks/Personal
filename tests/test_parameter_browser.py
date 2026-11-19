@@ -26,6 +26,21 @@ class Id:
         self.Value = value
 
 
+class XYZ:
+    def __init__(self, x, y, z):
+        self.X, self.Y, self.Z = x, y, z
+
+
+class Outline:
+    def __init__(self, minimum, maximum):
+        self.Minimum, self.Maximum = minimum, maximum
+
+
+class IdentityTransform:
+    def OfPoint(self, point):
+        return point
+
+
 class Param:
     def __init__(self, name, value_string=None, storage="StorageType.String", value=None, has_value=True):
         self.Definition = SimpleNamespace(Name=name)
@@ -83,6 +98,11 @@ class NodeList(list):
         del self[:]
 
 
+class GenericListFactory:
+    def __getitem__(self, _item_type):
+        return IdList
+
+
 class TreeNode:
     def __init__(self):
         self.Items = NodeList()
@@ -116,6 +136,17 @@ class LogicTests(unittest.TestCase):
         self.assertEqual([2], [r["id"] for r in logic.filter_records(recs, "Level", "L2")])
         self.assertEqual([], logic.filter_records(recs, "Level", None))
         self.assertEqual(["L1", "L2"], logic.level_options(recs + [{"level": ""}]))
+
+    def test_scoped_record_merge_preserves_rows_outside_the_refreshed_scope(self):
+        existing = [
+            {"id": 1, "level": "L1", "visible": False},
+            {"id": 2, "level": "L2", "visible": True},
+        ]
+        refreshed = [{"id": 3, "level": "L2", "visible": True}]
+        merged = logic.merge_scoped_records(existing, refreshed, "Level", "L2")
+        self.assertEqual([1, 3], [rec["id"] for rec in merged])
+        self.assertEqual([3], [rec["id"] for rec in logic.merge_scoped_records(
+            existing, refreshed, "Whole project")])
 
     def test_missing_fields_ignore_pseudo_fields(self):
         recs = [{"values": {"Name": "A"}}, {"values": {}}]
@@ -237,7 +268,7 @@ class ScriptTests(unittest.TestCase):
         module("clr", AddReference=Mock())
         module("System", Int32=int, Int64=int)
         module("System.Collections")
-        module("System.Collections.Generic", List={Id: IdList})
+        module("System.Collections.Generic", List=GenericListFactory())
         module("System.Data", DataTable=Mock())
         module("System.Windows", Visibility=SimpleNamespace(Visible="Visible", Collapsed="Collapsed"))
         module("System.Windows.Controls", DataGridTextColumn=Mock(), DataGridLength=Mock(),
@@ -247,10 +278,18 @@ class ScriptTests(unittest.TestCase):
                                      TemplateListItem=Mock())
         self.logger = Mock()
         self.FamilyInstance = type("FamilyInstance", (), {})
+        built_in_category = type("BuiltInCategory", (), {
+            "OST_MEPSpaces": "S", "OST_Rooms": "R", "OST_LightingFixtures": "LF",
+            "OST_ElectricalFixtures": "EF", "OST_ElectricalEquipment": "EE",
+            "OST_LightingDevices": "LD", "OST_FireAlarmDevices": "FA",
+            "OST_CommunicationDevices": "CD", "OST_DataDevices": "DD",
+            "OST_SecurityDevices": "SD", "OST_NurseCallDevices": "ND"})
         db = SimpleNamespace(ElementId=Id, FilteredElementCollector=Mock(), FamilyInstance=self.FamilyInstance,
+                             Level=type("Level", (), {}), BuiltInCategory=built_in_category,
+                             ElementMulticategoryFilter=Mock(), ElementLevelFilter=Mock(),
+                             BoundingBoxIntersectsFilter=Mock(), Outline=Outline, XYZ=XYZ,
                              BuiltInParameter=SimpleNamespace(ALL_MODEL_MARK="Mark", ROOM_NAME="Name", ROOM_PHASE="Phase"),
-                             BuiltInCategory=SimpleNamespace(OST_MEPSpaces="S", OST_Rooms="R",
-                                                             OST_LightingFixtures="LF", OST_DataDevices="DD"))
+                             )
         ui = SimpleNamespace(IExternalEventHandler=object, ExternalEvent=Mock(),
                              ExternalEventRequest=SimpleNamespace(Accepted="Accepted", Pending="Pending"))
         self.revit = SimpleNamespace(doc=None, uidoc=None)
@@ -299,6 +338,10 @@ class ScriptTests(unittest.TestCase):
         w.contents_ids = []
         w.phase_notes = {"Spaces": "Spaces matched in phase: NC"}
         w.contents = {"Spaces": logic.index_contents(ContentsLogicTests.ITEMS, "space"), "Rooms": {}}
+        w.unassigned_contents = {"Spaces": [ContentsLogicTests.ITEMS[-1]], "Rooms": []}
+        w.unassigned_scanned = True
+        w.unassigned_stale = False
+        w.unassigned_scanned_at = "2026-01-01 10:00"
         w.records["Spaces"][0]["label"] = "101 Office"
         self.w = w
 
@@ -373,16 +416,29 @@ class ScriptTests(unittest.TestCase):
         chain = collector.return_value.OfCategory.return_value.WhereElementIsNotElementType.return_value
         chain.ToElements.return_value = [self.elements[10], self.elements[11]]
         chain.ToElementIds.return_value = [Id(10)]
-        records, names = self.mod.read_source(self.doc, "S", Id(99), ["Number"])
+        records, names, elements = self.mod.read_source(self.doc, "S", ["Number"], view_id=Id(99))
         self.assertEqual(["Area", "Category", "Element Id", "Level", "Number"], names)
+        self.assertEqual(2, len(elements))
         self.assertEqual([(10, "L1", True, "101"), (11, "L2", False, "102")],
                          [(r["id"], r["level"], r["visible"], r["values"]["Number"]) for r in records])
         self.assertNotIn("Area", records[0]["values"])
+
+    def test_read_source_samples_parameter_names(self):
+        collector = self.mod.DB.FilteredElementCollector
+        chain = collector.return_value.OfCategory.return_value.WhereElementIsNotElementType.return_value
+        elements = [Element(i, 1, [Param("Common")]) for i in range(20)]
+        elements.append(Element(21, 1, [Param("Uncommon")]))
+        chain.ToElements.return_value = elements
+        records, names, _ = self.mod.read_source(self.doc, "S", ["Number"])
+        self.assertIn("Common", names)
+        self.assertNotIn("Uncommon", names)
+        self.assertEqual(21, len(records))
 
 
     def fixture(self, eid, category_unused, space_id):
         e = self.FamilyInstance()
         e.Id, e.LevelId, e.Name = Id(eid), Id(1), "LED"
+        e.Category = SimpleNamespace(BuiltInCategory=category_unused)
         e.Symbol = SimpleNamespace(FamilyName="Downlight")
         e.get_Parameter = lambda bip: Param("Mark", "M{}".format(eid))
         # Only the phase passed in matters; the phase-less .Space/.Room must not be used.
@@ -394,8 +450,8 @@ class ScriptTests(unittest.TestCase):
 
     def test_read_contents_records_space_and_skips_non_instances(self):
         collector = self.mod.DB.FilteredElementCollector
-        chain = collector.return_value.OfCategory.return_value.WhereElementIsNotElementType.return_value
-        chain.ToElements.side_effect = [[self.fixture(5, "LF", 10), object()], [self.fixture(6, "DD", None)]]
+        chain = collector.return_value.WherePasses.return_value.WhereElementIsNotElementType.return_value
+        chain.ToElements.return_value = [self.fixture(5, "LF", 10), object(), self.fixture(6, "DD", None)]
         spaces = self.mod.SpatialLookup("get_Space", ["Existing", "NC"])
         rooms = self.mod.SpatialLookup("get_Room", [SimpleNamespace(Name="NC")])
         items = self.mod.read_contents(self.doc, spaces, rooms)
@@ -408,6 +464,26 @@ class ScriptTests(unittest.TestCase):
                          [(i["id"], i["category"], i["space"], i["room"], i["mark"], i["level"], i["family"], i["type"])
                           for i in items])
 
+    def test_scoped_contents_rechecks_cached_elements_assigned_to_refreshed_spaces(self):
+        element = self.fixture(5, "LF", 10)
+        item = {"id": 5, "category": "Lighting Fixtures", "family": "Downlight",
+                "type": "LED", "mark": "M5", "level": "L1", "space": 10, "room": 20}
+        box = SimpleNamespace(Min=XYZ(0, 0, 0), Max=XYZ(10, 10, 10), Transform=IdentityTransform())
+        spatial = SimpleNamespace(get_BoundingBox=lambda view: box)
+        self.doc.GetElement = lambda eid: element if eid.Value == 5 else None
+        chain = (self.mod.DB.FilteredElementCollector.return_value.WherePasses.return_value
+                 .WherePasses.return_value.WhereElementIsNotElementType.return_value)
+        chain.ToElements.return_value = [element]
+        lookup = self.mod.SpatialLookup("get_Space", ["NC"])
+
+        refreshed, candidate_ids = self.mod.read_scoped_contents(
+            self.doc, "Spaces", [spatial], lookup, {10: [item]}, {10})
+
+        self.assertEqual({5}, candidate_ids)
+        self.assertEqual([(10, 20)], [(rec["space"], rec["room"]) for rec in refreshed])
+        self.mod.DB.ElementMulticategoryFilter.assert_called_once()
+        self.mod.DB.BoundingBoxIntersectsFilter.assert_called_once()
+
     def test_spatial_phases_use_room_phase_parameter_in_sequence(self):
         def spatial(phase_value):
             return SimpleNamespace(CreatedPhaseId=Id(1), get_Parameter=lambda bip: SimpleNamespace(
@@ -416,7 +492,8 @@ class ScriptTests(unittest.TestCase):
         chain.ToElements.return_value = [spatial(20), spatial(30), spatial(20), spatial(-1)]
         self.doc.Phases = [SimpleNamespace(Id=Id(1)), SimpleNamespace(Id=Id(20)), SimpleNamespace(Id=Id(30))]
         self.doc.GetElement = lambda eid: "phase{}".format(eid.Value)
-        self.assertEqual(["phase30", "phase20", "phase1"], self.mod.spatial_phases(self.doc, "S"))
+        elements = [spatial(20), spatial(30), spatial(20), spatial(-1)]
+        self.assertEqual(["phase30", "phase20", "phase1"], self.mod.spatial_phases(self.doc, elements))
 
     def test_selected_space_lists_its_elements(self):
         self.w.selected_element_ids = lambda: [10]

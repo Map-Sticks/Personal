@@ -44,6 +44,13 @@ Rules (all required):
    `UI.UIApplication.SelectionChanged` (2023+) with an event handler, not polling.
 8. If you need the user to pick an element, hide the window, do the pick in an ExternalEvent
    (`uidoc.Selection.PickObject`), then show it again.
+9. **Esc must never close a modeless window.** `forms.WPFWindow` closes itself on Esc by default
+   (`handle_esc=True`, pyRevit 4.8.0 onwards), so always call
+   `forms.WPFWindow.__init__(self, xaml, handle_esc=False)`. Do not put `IsCancel="True"` on any button in a
+   modeless window's XAML (WPF would click it on Esc). Users press Esc to cancel Revit commands and picks; that
+   must not kill the tool. Close only via the title-bar X or an explicit Close button.
+   `tests/test_extension_layout.py` enforces this for every `__persistentengine__` script/lib. Modal dialogs
+   (`show_dialog()`/`ShowDialog()`) may keep Esc-to-cancel.
 
 A complete, working, commented implementation is in
 `CustomPyRevit.extension/ETC PyTools.tab/Templates.panel/Modeless Window.pushbutton/`. **Copy that folder for

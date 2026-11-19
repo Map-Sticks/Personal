@@ -860,7 +860,7 @@ class CircuitHubExternalEventHandler(IExternalEventHandler):
 
 class CircuitHub(forms.WPFWindow):
     def __init__(self):
-        forms.WPFWindow.__init__(self, script.get_bundle_file("ui.xaml"))
+        forms.WPFWindow.__init__(self, script.get_bundle_file("ui.xaml"), handle_esc=False)
         self.settings = load_settings()
         self.target_circuit_id = None
         self.expanded_panel_ids = set()

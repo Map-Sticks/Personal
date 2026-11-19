@@ -1,4 +1,4 @@
-PARAMETER BROWSER 2.1 (modeless WPF window, read-only)
+PARAMETER BROWSER 2.2 (modeless WPF window, read-only)
 
 Files:
 - script.py                        window + ExternalEvent handler (all Revit access)
@@ -7,26 +7,29 @@ Files:
 
 How it works:
 - __persistentengine__ = True (and engine: persistent in bundle.yaml) keeps the handlers alive.
-- The command reads Spaces and Rooms once (valid API context) into plain Python data, then opens the
-  window with show(modal=False). The window never holds Revit Elements.
-- Source, scope, level, search and column order work on the cached data only (System.Data.DataTable
-  + DataView.RowFilter, so no IronPython property binding is needed).
-- Refresh Model, loading values for newly chosen columns, Select in Revit and Show / Zoom are queued
-  and run in IExternalEventHandler.Execute via ExternalEvent.Raise().
-- Select/Show only run when the project the list was read from is active; Refresh Model loads the
-  currently active project and active view.
-- "Current view" scope uses the view that was active at the last refresh.
+- The window opens with only the project's level names loaded. All Space/Room and content-element
+  reads run on demand through IExternalEventHandler.Execute via ExternalEvent.Raise().
+- Source, scope, level, search and column order work on cached plain-Python data
+  (System.Data.DataTable + DataView.RowFilter).
+- Refresh Selected reads the active source (Spaces or Rooms) and selected scope. Level scans use
+  ElementLevelFilter; Current view scans use the active view's collector. Related content elements
+  are prefiltered by one multicategory and bounding-box filter around the refreshed spaces/rooms,
+  plus elements previously assigned to those spaces so moved elements can be rechecked. A 1-foot
+  bounding-box margin catches nearby hosted content. Cached rows outside a refreshed level remain.
+- Refresh All re-reads both Spaces and Rooms, all content categories, and whole-project unassigned
+  results. Use it to restore a complete snapshot after broad changes or when switching projects.
+- Scan Unassigned separately scans content elements in the whole project; Refresh Selected does not
+  update this whole-project result. The UI indicates when unassigned data is stale/unscanned.
+- Parameter names are gathered from the first 20 spaces/rooms in a scan to avoid walking every
+  parameter on every element. Selected values load on demand for the cached records.
+- Select/Show only run when the project read is active; Refresh All loads the currently active project.
 - Clicking the ribbon button again closes the old window and opens a fresh one.
-- Elements in selection (side panel): Refresh Model also reads every family instance of the content
-  categories (Lighting/Electrical Fixtures, Electrical Equipment, Lighting/Fire Alarm/Communication/
-  Data/Security/Nurse Call Devices) and indexes them with FamilyInstance.get_Space(phase) /
-  get_Room(phase), using the phase(s) the Spaces/Rooms are placed in (latest first). The phase-less
-  .Space/.Room properties are NOT used: they are ambiguous in IronPython and use the project's last
-  phase, which left every element "not in any space". The panel shows the phase used and any errors. Clicking rows lists their
-  elements as Category > Family : Type > element. Select/Show act on the highlighted tree node, or on
-  everything listed if none is highlighted. "Not in any Space/Room" lists unassigned elements (often
-  ceiling devices above the space's upper limit). Categories... hides categories in the panel only.
-- "Count: <category>" columns (via Columns...) show those counts per row and sort numerically.
+- Contents: family instances of Lighting/Electrical Fixtures, Electrical Equipment, Lighting/Fire
+  Alarm/Communication/Data/Security/Nurse Call Devices. Association uses FamilyInstance.get_Space(phase) /
+  get_Room(phase) with explicit phases. The phase-less .Space/.Room properties are not used.
+- "Not in any Space/Room" is a whole-project result and can include ceiling devices above spatial
+  boundaries. Categories... only changes which categories are displayed.
+- "Count: <category>" columns show the cached content counts for each spatial element.
 - Not included: linear elements (conduit, tray, duct, pipe), elements in linked models, and Rooms
-  that live in a linked model (FamilyInstance.Room only sees Rooms in the host model).
+  that live in a linked model.
 - Settings: %APPDATA%\pyRevit\ParameterBrowser.settings.json

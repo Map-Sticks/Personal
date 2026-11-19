@@ -1088,7 +1088,7 @@ def place_on_linked_wall_face(link_inst, linked_wall, space, type_data_list, sym
 class PlaceFixturesWindow(forms.WPFWindow):
     def __init__(self):
         xaml = XAML_PATH or script.get_bundle_file("ui.xaml")
-        forms.WPFWindow.__init__(self, xaml)
+        forms.WPFWindow.__init__(self, xaml, handle_esc=False)
 
         self._spaces = []
         self._space_map = {}

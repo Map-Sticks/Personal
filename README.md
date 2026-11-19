@@ -441,7 +441,8 @@ any previous shortcuts or favorites may need to be assigned again.
   `python tools/revit_api_lookup.py ExternalEvent --ui --year 2025`).
 - `docs/pyrevit-mcp.md` - pyRevit MCP connector setup (`.vscode/mcp.json` registers the server).
 - `Templates.panel/Modeless Window.pushbutton` - working modeless window template (sets Comments on the
-  selection). Copy it for every new window-based tool.
+  selection). Copy it for every new window-based tool. Modeless windows must not close on Esc
+  (`handle_esc=False`, no `IsCancel` buttons); `tests/test_extension_layout.py` enforces this.
 
 ## Load the extension in Revit
 
