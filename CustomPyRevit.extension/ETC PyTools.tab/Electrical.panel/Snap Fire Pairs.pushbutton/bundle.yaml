@@ -1,0 +1,8 @@
+title: Snap Fire\nPairs
+tooltip: >-
+  Snap selected surface smoke detectors and speakers in one room or corridor into the
+  ceiling tiles. Click two opposite corners of one tile to set the grid; each detector +
+  speaker pair is placed in one tile (centre +/- a quarter of the long side), keeping
+  which device is on which side. Preview, then Yes/No. X/Y only; height is unchanged.
+author: Jacques-Michael
+context: doc-project

@@ -1,0 +1,44 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Fire &amp; EWS Layout - review criteria" SizeToContent="Height"
+        Width="670" MaxHeight="730" ResizeMode="NoResize" WindowStartupLocation="CenterScreen">
+  <DockPanel Margin="18">
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+      <Button Content="Cancel" Width="85" Margin="0,0,8,0" IsCancel="True"/>
+      <Button Content="Review" Width="85" IsDefault="True" Click="accept"/>
+    </StackPanel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+        <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">All distances are horizontal and in mm. New placement needs an approved design reference, both clearances and both detector reach limits; maximum move is not used. These checks do not certify compliance.</TextBlock>
+        <Label Target="{Binding ElementName=Reference}" Content="Design reference / edition"/>
+        <TextBlock TextWrapping="Wrap">The project document and edition your entered limits come from. This text does not load or interpret a standard.</TextBlock>
+        <TextBox x:Name="Reference" Margin="0,3,10,4"/>
+        <Label Target="{Binding ElementName=Wall}" Content="Minimum distance from the device centre to a wall face"/>
+        <TextBlock TextWrapping="Wrap">Reject a proposed centre closer than this to the nearest identified physical wall face. Room separators and ceiling edges do not count as walls.</TextBlock>
+        <TextBox x:Name="Wall" Margin="0,3,10,4"/>
+        <Label Target="{Binding ElementName=Separation}" Content="Minimum centre-to-centre distance to another device or fixture"/>
+        <TextBlock TextWrapping="Wrap">Keep proposed centres this far from other scanned host points near ceiling height. This is not a family-body clash or a check of trade links.</TextBlock>
+        <TextBox x:Name="Separation" Margin="0,3,10,4"/>
+        <Label Target="{Binding ElementName=Travel}" Content="Maximum move from the current location"/>
+        <TextBlock TextWrapping="Wrap">How far you are willing to shift an existing device in plan. For example, 300 allows up to 300 mm of travel; it is not a design limit.</TextBlock>
+        <TextBox x:Name="Travel" Margin="0,3,10,4"/>
+        <Label Target="{Binding ElementName=DetectorPitch}" Content="Maximum detector-to-nearest-detector distance (optional)"/>
+        <TextBlock TextWrapping="Wrap">Flags a detector whose nearest directly reachable detector is farther away. This check alone does not find every gap.</TextBlock>
+        <TextBox x:Name="DetectorPitch" Margin="0,3,10,4"/>
+        <Label Target="{Binding ElementName=DetectorRadius}" Content="Maximum distance from a sampled interior point to a detector (optional)"/>
+        <TextBlock TextWrapping="Wrap">Tests points across the review area against the nearest detector without crossing a barrier in plan. Counts samples over the limit or without a direct route.</TextBlock>
+        <TextBox x:Name="DetectorRadius" Margin="0,3,10,4"/>
+        <Label Target="{Binding ElementName=DetectorEdge}" Content="Maximum distance from a sampled wall point to a detector (optional)"/>
+        <TextBlock TextWrapping="Wrap">Tests reach to points along identified walls. Unlike the minimum wall clearance above, this checks for walls too far from a detector.</TextBlock>
+        <TextBox x:Name="DetectorEdge" Margin="0,3,10,4"/>
+        <Label Target="{Binding ElementName=SpeakerPitch}" Content="Maximum speaker-to-nearest-speaker distance (optional)"/>
+        <TextBlock TextWrapping="Wrap">A geometric spacing check only. It does not estimate sound level or speech intelligibility.</TextBlock>
+        <TextBox x:Name="SpeakerPitch" Margin="0,3,10,4"/>
+        <Label Target="{Binding ElementName=Tile}" Content="Approved full tile dimensions (short x long)"/>
+        <TextBlock TextWrapping="Wrap">For example, 600 x 1200. This sets the expected panel size; Revit supplies the actual grid position and rotation.</TextBlock>
+        <TextBox x:Name="Tile" Text="600 x 1200" Margin="0,3,10,4"/>
+        <CheckBox x:Name="Candidates" Margin="0,10" Content="Show at most one optional new position per enclosed room and system"/>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

@@ -3,6 +3,8 @@ layout:
   - 'Manual Wall Placement[title:Manual Wall\nPlacement]'
   - 'FindLinkedFixtures[title:Find Linked\nFixtures]'
   - 'Draw Switchlines[title:Draw\nSwitchlines]'
+  - 'Snap Fire Pairs[title:Snap Fire\nPairs]'
+  - 'Fire EWS Layout[title:Fire & EWS\nLayout]'
   - 'CircuitHub[title:Circuit\nHub]'
   - 'CableTrayCoordinator[title:Tray\nCoordinator]'
   - 'ParameterBrowser[title:Parameter\nBrowser]'

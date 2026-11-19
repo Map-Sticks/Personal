@@ -16,9 +16,9 @@ LEGACY_TAB = EXTENSION / "Custom Tools.tab"
 BUTTONS = {
     "Asset Management.panel": ["NWB Asset ID"],
     "Electrical.panel": [
-        "CableTrayCoordinator", "CircuitHub", "Draw Switchlines", "FindLinkedFixtures",
+        "CableTrayCoordinator", "CircuitHub", "Draw Switchlines", "FindLinkedFixtures", "Fire EWS Layout",
         "Manual Wall Placement", "ParameterBrowser", "ParameterBrowser WebView",
-        "Place Ceiling Devices", "Place Fixtures", "Route Cable Along Tray",
+        "Place Ceiling Devices", "Place Fixtures", "Route Cable Along Tray", "Snap Fire Pairs",
     ],
     "Family Tools.panel": ["Family Offset Setup", "Middle Family Parameters", "Switch Colour Setup"],
     "Getting Started.panel": ["Document Info", "List Sheets"],
@@ -36,6 +36,8 @@ PANEL_LAYOUTS = {
         ("Manual Wall Placement", "Manual Wall\nPlacement"),
         ("FindLinkedFixtures", "Find Linked\nFixtures"),
         ("Draw Switchlines", "Draw\nSwitchlines"),
+        ("Snap Fire Pairs", "Snap Fire\nPairs"),
+        ("Fire EWS Layout", "Fire & EWS\nLayout"),
         ("CircuitHub", "Circuit\nHub"),
         ("CableTrayCoordinator", "Tray\nCoordinator"),
         ("ParameterBrowser", "Parameter\nBrowser"),
@@ -94,6 +96,8 @@ MOVED_RESOURCES = {
         "lib/parameter_browser_webview_data.py",
     ],
     ("Electrical.panel", "Place Ceiling Devices"): ["CONTEXT.md"],
+    ("Electrical.panel", "Snap Fire Pairs"): ["icon.png", "CONTEXT.md", "lib/tile_snap_logic.py"],
+    ("Electrical.panel", "Fire EWS Layout"): ["icon.png", "settings.xaml", "lib/fire_ews_review.py"],
     ("Electrical.panel", "Route Cable Along Tray"): ["CONTEXT.md"],
     ("Templates.panel", "Modeless Window"): ["window.xaml"],
     ("Views and Sheets.panel", "Normalise Sheet Origins"): ["lib/sheet_origins_logic.py"],
@@ -190,7 +194,7 @@ class ExtensionLayoutTests(unittest.TestCase):
                     titles.add(title)
 
         all_buttons = {(panel, name) for panel, names in BUTTONS.items() for name in names}
-        self.assertEqual(28, len(visible))
+        self.assertEqual(30, len(visible))
         self.assertEqual(all_buttons - HIDDEN_BUTTONS, visible)
         self.assertTrue(HIDDEN_BUTTONS.isdisjoint(visible))
 

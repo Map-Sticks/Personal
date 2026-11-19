@@ -206,6 +206,53 @@ the action taken. See [docs/normalise-sheet-origins.md](docs/normalise-sheet-ori
 `Place Ceiling Devices` is a **scaffold only**, hidden from the ribbon: it shows a "not implemented"
 alert. Requirements and lessons learned are in its `CONTEXT.md`.
 
+`Snap Fire Pairs` (Electrical panel) snaps the selected surface smoke detectors and EWIS speakers
+in one room or corridor into the ceiling tiles, in X and Y only. The user clicks two opposite
+corners of one tile to give the grid. Each detector + speaker pair then shares one tile (the
+centre +/- a quarter of the long side), keeping which device is on which side. The tool shows a
+preview in the output window and asks Yes/No before one undoable transaction. Its house rules,
+the reasons behind the design and the roadmap are in
+[its CONTEXT.md](CustomPyRevit.extension/ETC%20PyTools.tab/Electrical.panel/Snap%20Fire%20Pairs.pushbutton/CONTEXT.md).
+
+`Fire & EWS Layout` (Electrical panel) is a read-only review for smoke detectors and EWS
+speakers, independently or together. Pick rooms, MEP spaces or ceilings directly in the
+model, or use the department/level scope. Select devices in the model once to tell the
+tool which types to review. A picked ceiling is not picked again: confirm its finish once
+per type. The tool saves device types, confirmed ceiling finishes, review criteria and
+tile dimensions locally per project. Choose **Use saved criteria and reconfirm types** to
+change the mappings. Use **Edit criteria** for definitions of the move limits and optional
+spacing checks. Leave the design reference blank for measurement only. A preview of
+existing-device moves lists the target wall and T-bar distances and explains why a device
+was kept or blocked. The report also shows a plan map, nearest same-system spacing
+and distances to modeled walls and T-bars. Ceiling scope ignores room separators and uses
+the ceiling footprint plus physical wall sections from the host and selected link; it
+doesn't treat the ceiling edge as a wall or propose additional devices from that scope.
+Native grid proposals require **Revit 2025.3+** and confirmed lay-in types. The tool does not
+move, place or delete anything, certify coverage or audibility, check other trade links,
+or verify family hosting.
+
+Choose **Preview detector + speaker pairs** to keep existing counts and try a coordinated
+position. In a tiled review area with one detector and one speaker, up to 25 m2 and 6 m
+across, it tries the most central valid tile first. Otherwise, it starts nearest the
+current pair. It considers one-to-one matches within 1,500 mm on the
+same ceiling and leaves ambiguous pairs alone. On verified 1,200 x 600 lay-in panels the
+targets are the two half-centres (600 mm apart); on confirmed flush ceilings the targets
+follow the horizontal or vertical long centreline of the review area. It checks both
+targets against the saved limits and reports blocked pairs instead of moving one device alone.
+
+For new work, pick **one empty ceiling, room, or MEP space** on the active plan level and
+choose **Place new detectors** or **Place new detector + speaker pairs**. Pick a ceiling
+when room separators split a continuous area: placement uses the ceiling footprint
+and modeled wall sections from the host and selected link, not room boundaries.
+Select one supported
+type per system and confirm the ceiling finish first. The tool proposes locations using
+the approved wall/fixture clearances and detector interior/wall reach limits; no move
+limit is required. It refuses an incomplete sampled layout and requires confirmation
+before creating all devices in one undoable transaction. This is not a compliance,
+trade-clash or acoustics check; it does not wire, circuit, or address the new devices.
+The [button handoff](<./CustomPyRevit.extension/ETC PyTools.tab/Electrical.panel/Fire EWS Layout.pushbutton/CONTEXT.md>)
+records the current limits and the next mixed-ceiling and wall-search validation steps.
+
 `Route Cable Along Tray` is also a **scaffold only**, hidden from the ribbon; it will route a
 circuit path along cable trays and report cable length. See its `CONTEXT.md`.
 
@@ -343,11 +390,11 @@ localStorage (seeded from the classic button's settings file).
 
 ## ETC PyTools toolbar
 
-The 28 implemented commands are placed directly on the ribbon, in this order, under
+The 29 implemented commands are placed directly on the ribbon, in this order, under
 `CustomPyRevit.extension/ETC PyTools.tab`:
 
 - **Electrical:** Place Fixtures; Manual Wall Placement; Find Linked Fixtures; Draw Switchlines;
-  Circuit Hub; Tray Coordinator; Parameter Browser; Parameter WebView (pyRevit 7+).
+  Snap Fire Pairs; Circuit Hub; Tray Coordinator; Parameter Browser; Parameter WebView (pyRevit 7+).
 - **Model Tools:** Focus Select; Align Section Box; Flip Workplane; Color Scheme Editor; Detail Line Fillets.
 - **Family Tools:** Offset Setup; Middle Family Params; Switch Colour Setup.
 - **Spaces:** Space Plans Stage 3.6; Align Elev. Rows; Room Regions.
