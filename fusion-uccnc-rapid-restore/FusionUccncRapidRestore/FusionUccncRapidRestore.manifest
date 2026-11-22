@@ -1,0 +1,13 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "b7c4f2a8-91e3-4d6b-8c5a-3e9f1b2d4a70",
+  "author": "Map-Sticks",
+  "description": {
+    "": "Restores conservative G0 rapid moves in Fusion Personal UCCNC G-code (.nc/.tap) files without modifying the Fusion design."
+  },
+  "version": "1.0.0",
+  "runOnStartup": false,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}
