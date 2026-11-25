@@ -1,0 +1,10 @@
+title: Browser &
+  Scheduler
+tooltip: >-
+  Ultimate modeless Revit Browser & Scheduler. Search any combination of Revit
+  categories, types, views, sheets, and linked models; group/total takeoffs;
+  edit or safely delete elements; export/import protected Excel (.xlsx) with
+  3-way diff; live O(k) active refresh; and save/load presets.
+author: Jacques-Michael Oosthuizen / Microsoft Copilot
+engine:
+  persistent: true

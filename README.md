@@ -388,13 +388,27 @@ Copy and CSV export all run in the browser. **Select / Show** use pyRevit's `rev
 select links, and **Refresh model** re-runs the button. Settings live in the WebView2 profile's
 localStorage (seeded from the classic button's settings file).
 
+`Browser & Scheduler` (`RevitBrowserScheduler`, Electrical panel) is a full modeless Revit browser
+and multi-category scheduler. It searches across any combination of Revit model categories, special
+sources (Views, Sheets, Levels, Grids, Worksets, Links, MEP Systems, Circuits), Family Types, and
+read-only Linked Model elements with structured query operators (`=`, `!=`, `>`, `~`, `EMPTY`,
+`DUPLICATE`, `OR`, `-exclude`), natural sorting, grouped takeoffs with totals, and a
+**Selected Spaces / Rooms** combination scope. It includes user presets plus starter presets
+(takeoffs/totals, specific spaces, selected-spaces combined takeoff, views/sheets, model QA),
+an O(k) `DocumentChanged` active refresh scoped to listed elements, staged inline/bulk editing
+(Bulk Set, Find/Replace, Auto-Number, clipboard paste) with Type blast-radius warnings,
+cascade-aware safe deletion with a rolled-back preview, and protected `.xlsx` Excel export/import
+with 3-way diffing and non-modifiable guardrails. See the
+[implementation plan](docs/ultimate-revit-browser-scheduler-plan.md) and
+[progress log](docs/ultimate-revit-browser-scheduler-progress.md).
+
 ## ETC PyTools toolbar
 
 The 29 implemented commands are placed directly on the ribbon, in this order, under
 `CustomPyRevit.extension/ETC PyTools.tab`:
 
 - **Electrical:** Place Fixtures; Manual Wall Placement; Find Linked Fixtures; Draw Switchlines;
-  Snap Fire Pairs; Circuit Hub; Tray Coordinator; Parameter Browser; Parameter WebView (pyRevit 7+).
+  Snap Fire Pairs; Circuit Hub; Tray Coordinator; Parameter Browser; Parameter WebView (pyRevit 7+); Browser & Scheduler.
 - **Model Tools:** Focus Select; Align Section Box; Flip Workplane; Color Scheme Editor; Detail Line Fillets.
 - **Family Tools:** Offset Setup; Middle Family Params; Switch Colour Setup.
 - **Spaces:** Space Plans Stage 3.6; Align Elev. Rows; Room Regions.

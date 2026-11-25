@@ -9,3 +9,4 @@ layout:
   - 'CableTrayCoordinator[title:Tray\nCoordinator]'
   - 'ParameterBrowser[title:Parameter\nBrowser]'
   - 'ParameterBrowser WebView[title:Parameter\nWebView]'
+  - 'RevitBrowserScheduler[title:Browser &\nScheduler]'

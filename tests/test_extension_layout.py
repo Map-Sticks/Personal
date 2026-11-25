@@ -18,7 +18,7 @@ BUTTONS = {
     "Electrical.panel": [
         "CableTrayCoordinator", "CircuitHub", "Draw Switchlines", "FindLinkedFixtures", "Fire EWS Layout",
         "Manual Wall Placement", "ParameterBrowser", "ParameterBrowser WebView",
-        "Place Ceiling Devices", "Place Fixtures", "Route Cable Along Tray", "Snap Fire Pairs",
+        "Place Ceiling Devices", "Place Fixtures", "RevitBrowserScheduler", "Route Cable Along Tray", "Snap Fire Pairs",
     ],
     "Family Tools.panel": ["Family Offset Setup", "Middle Family Parameters", "Switch Colour Setup"],
     "Getting Started.panel": ["Document Info", "List Sheets"],
@@ -42,6 +42,7 @@ PANEL_LAYOUTS = {
         ("CableTrayCoordinator", "Tray\nCoordinator"),
         ("ParameterBrowser", "Parameter\nBrowser"),
         ("ParameterBrowser WebView", "Parameter\nWebView"),
+        ("RevitBrowserScheduler", "Browser &\nScheduler"),
     ],
     "Model Tools.panel": [
         ("Focus Select", "Focus\nSelect"),
@@ -194,7 +195,7 @@ class ExtensionLayoutTests(unittest.TestCase):
                     titles.add(title)
 
         all_buttons = {(panel, name) for panel, names in BUTTONS.items() for name in names}
-        self.assertEqual(30, len(visible))
+        self.assertEqual(31, len(visible))
         self.assertEqual(all_buttons - HIDDEN_BUTTONS, visible)
         self.assertTrue(HIDDEN_BUTTONS.isdisjoint(visible))
 

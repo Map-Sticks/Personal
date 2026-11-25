@@ -1,0 +1,146 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Revit Browser &amp; Scheduler" Width="1520" Height="820" MinWidth="1020" MinHeight="540"
+        WindowStartupLocation="CenterScreen" ShowInTaskbar="True">
+    <DockPanel Margin="10">
+        <!-- TOP TOOLBARS -->
+        <StackPanel DockPanel.Dock="Top">
+            <!-- Row 1: Presets, Sources, Scope, Refresh -->
+            <WrapPanel Margin="0,0,0,6">
+                <TextBlock Text="Preset" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,5,0"/>
+                <ComboBox x:Name="cmbPreset" Width="230" SelectionChanged="preset_changed" Margin="0,0,4,0"/>
+                <Button Content="Save" Click="preset_save_clicked" Padding="8,3" Margin="0,0,4,0"
+                        ToolTip="Save current settings as a named preset"/>
+                <Button Content="Manage..." Click="preset_manage_clicked" Padding="8,3" Margin="0,0,12,0"
+                        ToolTip="Delete, export, or import presets"/>
+
+                <Button Content="Sources..." Click="choose_sources_clicked" Padding="10,3" Margin="0,0,6,0"
+                        FontWeight="SemiBold" ToolTip="Choose any combination of Revit categories and special element classes"/>
+                <CheckBox x:Name="chkTypes" Content="Types" VerticalAlignment="Center" Margin="0,0,8,0"
+                          ToolTip="Include Element Types / FamilySymbols"/>
+                <CheckBox x:Name="chkLinks" Content="Links (RO)" VerticalAlignment="Center" Margin="0,0,12,0"
+                          ToolTip="Include Linked Model elements (read-only)"/>
+
+                <TextBlock Text="Scope" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <ComboBox x:Name="cmbScope" Width="155" SelectionChanged="scope_changed" Margin="0,0,6,0"/>
+                <ComboBox x:Name="cmbScopeValue" Width="155" SelectionChanged="scope_value_changed"
+                          Visibility="Collapsed" Margin="0,0,6,0"/>
+                <Button x:Name="btnPickSpaces" Content="Pick Spaces..." Click="pick_spaces_clicked"
+                        Padding="8,3" Visibility="Collapsed" Margin="0,0,6,0"
+                        ToolTip="Pick one or more specific Spaces/Rooms to combine"/>
+
+                <Button Content="Columns..." Click="choose_columns_clicked" Padding="10,3" Margin="0,0,6,0"
+                        ToolTip="Choose Instance [I], Type [T], Pseudo, and Count columns"/>
+                <Button Content="Load / Refresh" Click="refresh_clicked" Padding="12,3" FontWeight="SemiBold"
+                        Margin="0,0,8,0" ToolTip="Load or refresh the scheduled elements from Revit"/>
+
+                <TextBlock Text="Auto-Refresh" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <ComboBox x:Name="cmbRefreshMode" Width="105" SelectionChanged="refresh_mode_changed"/>
+            </WrapPanel>
+
+            <!-- Row 2: Power Search, Grouping/Totals, Sync, Excel -->
+            <DockPanel Margin="0,0,0,6">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="8,0,0,0">
+                    <CheckBox x:Name="chkGrouped" Content="Group / Totals" VerticalAlignment="Center"
+                              Checked="grouped_toggled" Unchecked="grouped_toggled" Margin="0,0,6,0"
+                              ToolTip="Group rows and compute Count and numeric Sum totals"/>
+                    <Button Content="Group By..." Click="choose_group_by_clicked" Padding="8,3" Margin="0,0,10,0"
+                            ToolTip="Choose grouping columns for takeoffs and totals"/>
+                    <CheckBox x:Name="chkSyncSelection" Content="Sync Revit Sel" VerticalAlignment="Center"
+                              Checked="sync_selection_toggled" Unchecked="sync_selection_toggled" Margin="0,0,10,0"
+                              ToolTip="Highlight rows automatically when selection changes in Revit"/>
+                    <CheckBox x:Name="chkShowSidePanel" Content="Contents Panel" VerticalAlignment="Center"
+                              Checked="side_panel_toggled" Unchecked="side_panel_toggled" Margin="0,0,10,0"/>
+                    <Button Content="Export Excel..." Click="export_excel_clicked" Padding="10,3" Margin="0,0,4,0"
+                            ToolTip="Export schedule to protected .xlsx (grey locked cells for non-modifiable items)"/>
+                    <Button Content="Import Excel..." Click="import_excel_clicked" Padding="10,3"
+                            ToolTip="Import modified .xlsx with 3-way diff and non-modifiable guardrails"/>
+                </StackPanel>
+                <Button DockPanel.Dock="Right" Content="Clear" Click="clear_search_clicked" Padding="8,3" Margin="4,0,0,0"/>
+                <TextBox x:Name="txtSearch" Height="28" VerticalContentAlignment="Center" FontSize="13"
+                         TextChanged="search_changed"
+                         ToolTip="Search words or operators: Category:Walls Level=&quot;L01&quot; Area&gt;20 Mark:EMPTY Mark:DUPLICATE -Generic OR ..."/>
+            </DockPanel>
+
+            <!-- Row 3: Stale / Pending Edits / Bulk Edit Action Bar -->
+            <DockPanel Margin="0,0,0,6">
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <Button Content="Bulk Set..." Click="bulk_set_clicked" Padding="8,3" Margin="0,0,4,0"
+                            ToolTip="Stage a value across all selected rows for one editable column"/>
+                    <Button Content="Find &amp; Replace..." Click="find_replace_clicked" Padding="8,3" Margin="0,0,4,0"
+                            ToolTip="Find and replace text/regex in an editable column for selected rows"/>
+                    <Button Content="Auto-Number..." Click="auto_number_clicked" Padding="8,3" Margin="0,0,4,0"
+                            ToolTip="Sequentially number an editable column across selected rows"/>
+                    <Button Content="Paste Excel" Click="paste_clipboard_clicked" Padding="8,3" Margin="0,0,10,0"
+                            ToolTip="Paste tab-separated clipboard cells into selected rows"/>
+                    <Button x:Name="btnApplyEdits" Content="Apply Edits (0)" Click="apply_edits_clicked"
+                            Padding="10,3" FontWeight="SemiBold" Margin="0,0,4,0" IsEnabled="False"
+                            ToolTip="Commit all staged parameter edits to Revit in one undoable transaction"/>
+                    <Button x:Name="btnRevertEdits" Content="Revert" Click="revert_edits_clicked"
+                            Padding="8,3" Margin="0,0,12,0" IsEnabled="False"
+                            ToolTip="Discard all unsaved staged edits"/>
+                    <Button Content="Delete Selected..." Click="delete_selected_clicked" Padding="10,3"
+                            Foreground="#991B1B"
+                            ToolTip="Safely delete selected host elements with cascade-impact preview"/>
+                </StackPanel>
+                <Button x:Name="btnApplyDelta" DockPanel.Dock="Right" Content="Refresh Changes"
+                        Click="apply_delta_clicked" Padding="10,3" Visibility="Collapsed"
+                        Background="#FEF3C7" FontWeight="SemiBold"/>
+                <TextBlock x:Name="lblTotals" DockPanel.Dock="Right" VerticalAlignment="Center"
+                           Foreground="#1E3A8A" FontWeight="SemiBold" Margin="0,0,10,0"/>
+            </DockPanel>
+        </StackPanel>
+
+        <!-- BOTTOM NAVIGATION & STATUS BAR -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <Button Content="Select" Click="select_clicked" Padding="12,4" Margin="0,0,4,0"/>
+                <Button Content="Show / Zoom" Click="show_clicked" Padding="12,4" Margin="0,0,4,0"/>
+                <Button Content="Isolate" Click="isolate_clicked" Padding="10,4" Margin="0,0,4,0"
+                        ToolTip="Temporarily isolate selected elements in the active Revit view"/>
+                <Button Content="Reset Isolate" Click="reset_isolate_clicked" Padding="10,4" Margin="0,0,4,0"/>
+                <Button Content="Open View" Click="open_view_clicked" Padding="10,4" Margin="0,0,8,0"
+                        ToolTip="Activate selected View or Sheet in Revit"/>
+                <Button Content="Close" Click="close_clicked" Padding="12,4"/>
+            </StackPanel>
+            <StackPanel>
+                <TextBlock x:Name="lblCount" FontWeight="SemiBold"/>
+                <TextBlock x:Name="lblStatus" Foreground="#4B5563" TextWrapping="Wrap"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- MAIN SPLIT GRID -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="420"/>
+                <ColumnDefinition x:Name="colSplitter" Width="0"/>
+                <ColumnDefinition x:Name="colSidePanel" Width="0"/>
+            </Grid.ColumnDefinitions>
+
+            <DataGrid x:Name="grid" Grid.Column="0" AutoGenerateColumns="False" IsReadOnly="False"
+                      CanUserAddRows="False" CanUserDeleteRows="False"
+                      SelectionMode="Extended" SelectionUnit="FullRow"
+                      CanUserSortColumns="True" CanUserReorderColumns="True" CanUserResizeColumns="True"
+                      MouseDoubleClick="row_double_clicked"
+                      SelectionChanged="grid_selection_changed"
+                      BeginningEdit="grid_beginning_edit"
+                      CellEditEnding="grid_cell_edit_ending"
+                      EnableRowVirtualization="True" EnableColumnVirtualization="True"/>
+
+            <GridSplitter x:Name="splitter" Grid.Column="1" Width="6" HorizontalAlignment="Stretch"
+                          ResizeBehavior="PreviousAndNext" Visibility="Collapsed"/>
+
+            <DockPanel x:Name="sidePanel" Grid.Column="2" Visibility="Collapsed">
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <TextBlock Text="Elements in Selected Spaces / Rooms" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="lblContents" Foreground="#4B5563" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
+                    <Button Content="Select" Click="contents_select_clicked" Padding="10,3" Margin="0,0,4,0"/>
+                    <Button Content="Show / Zoom" Click="contents_show_clicked" Padding="10,3"/>
+                </StackPanel>
+                <TreeView x:Name="treeContents"/>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
+</Window>
